@@ -103,8 +103,12 @@ Le binaire `edlink-cli` reste utile pour tester le protocole sans interface :
 
 ```bash
 cargo run -p edlink-cli -- --port /dev/cu.usbmodemXXXX devinf
+cargo run -p edlink-cli -- --port /dev/cu.usbmodemXXXX ls "sd:/GAMES"
 cargo run -p edlink-cli -- --port /dev/cu.usbmodemXXXX cp local.pce "sd:GAMES/local.pce"
 cargo run -p edlink-cli -- --port /dev/cu.usbmodemXXXX run "sd:GAMES/local.pce"
+
+# Capturer la trame série brute (validation protocole sur vraie carte) :
+EDLINK_TRACE=1 cargo run -p edlink-cli -- --port /dev/cu.usbmodemXXXX ls "sd:/GAMES"
 ```
 
 > Sur macOS, utilisez le port **`/dev/cu.*`** (call‑up) et non `/dev/tty.*`,
@@ -151,6 +155,7 @@ réinitialise son état par session. Commandes utiles :
 | Commande | Comportement émulé |
 |---|---|
 | `devinf` | Infos carte (série `TEDP…`, versions, tensions `05.00/02.50/01.20`) |
+| `ls` | Liste un dossier de la carte SD virtuelle (`CMD_F_DIR_OPN`/`DIR_RD`) |
 | `cp` | Lit/écrit dans le dossier local (carte SD virtuelle), gère les sous‑dossiers |
 | `run` | Copie la ROM vers `sd:/usb-games/`, la charge en RAM0, la « lance » |
 | `screen` | Renvoie un PNG 320×224 (dégradé de couleurs = le « menu » virtuel) |
@@ -183,9 +188,11 @@ reçu (test `probe`), vérifiez :
 
 ## Limitations connues
 
-- **Pas de listing de dossiers SD** : la référence `edlink` n'expose pas les
-  commandes de navigation `CMD_F_DIR_*` ; on fournit donc un chemin de
-  destination explicite. (Voie d'amélioration : implémenter ces commandes.)
+- **Listing de dossiers SD reconstitué** : `CMD_F_DIR_OPN` / `CMD_F_DIR_RD` ne
+  sont pas câblés par la référence `edlink` ; l'implémentation reproduit la
+  couche FS du firmware MCU des cartes « Pro » et **reste à valider sur matériel
+  réel** (`EDLINK_TRACE=1 edlink-cli --port … ls sd:/GAMES` pour capturer la
+  trame réelle et ajuster — cf. `docs/PROTOCOL.md`).
 - **TED Pro non compatible RTC** via `edlink` (`RtcSet`/`RtcCal` lèvent
   `UnsupportedCmd`) : le RTC n'est pas exposé.
 - Les transferts sont **synchromes** et peuvent brièvement geler l'interface

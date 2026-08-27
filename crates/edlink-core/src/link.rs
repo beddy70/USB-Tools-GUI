@@ -7,11 +7,42 @@ use crate::error::{EdError, Result};
 use crate::protocol::{CMD_STATUS, CMD_STATUS2, STATUS_KEY};
 use serialport::SerialPort;
 use std::io::Read;
+use std::sync::OnceLock;
 use std::time::Duration;
 
 const STATUS_KEY_OLD: u8 = 0xA5;
 const PROTOCOL_ID_MEGA: u8 = 0x05;
 const PROTOCOL_ID_N8: u8 = 0x06;
+
+/// Trace série : si la variable d'environnement `EDLINK_TRACE` est définie (à
+/// autre chose que "0"/"false"), chaque octet émis/reçu est journalisé sur
+/// stderr. Indispensable pour valider un protocole sur matériel réel sans
+/// analyseur logique (ex: reconstitution du listing de dossiers SD).
+fn trace_enabled() -> bool {
+    static ON: OnceLock<bool> = OnceLock::new();
+    *ON.get_or_init(|| {
+        std::env::var("EDLINK_TRACE")
+            .map(|v| !v.is_empty() && v != "0" && v.to_lowercase() != "false")
+            .unwrap_or(false)
+    })
+}
+
+fn trace(dir: &str, buf: &[u8]) {
+    if !trace_enabled() || buf.is_empty() {
+        return;
+    }
+    let hex: String = buf
+        .iter()
+        .take(64)
+        .map(|b| format!("{b:02X} "))
+        .collect();
+    let more = if buf.len() > 64 {
+        format!("… (+{} o)", buf.len() - 64)
+    } else {
+        String::new()
+    };
+    eprintln!("[edlink-trace] {dir} {:>4} o : {hex}{more}", buf.len());
+}
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 enum Protocol {
@@ -125,6 +156,20 @@ impl Link {
         self.swap_endians = swap;
     }
 
+    /// Timeout de lecture par défaut, rétabli après une opération longue.
+    pub const OP_TIMEOUT: Duration = Duration::from_millis(2000);
+    /// Timeout élargi pour les opérations « carte SD » (ouverture de dossier,
+    /// premier bloc de lecture d'un gros fichier) : une vraie carte SD peut
+    /// marquer une pause de plusieurs secondes (parcours de la FAT, latence
+    /// interne). Le firmware n'émet alors rien tant qu'il n'a pas la donnée.
+    pub const FS_TIMEOUT: Duration = Duration::from_millis(6000);
+
+    /// Change le timeout de lecture du port (voir [`Self::FS_TIMEOUT`]).
+    pub fn set_read_timeout(&mut self, d: Duration) -> Result<()> {
+        self.port.set_timeout(d)?;
+        Ok(())
+    }
+
     pub fn bytes_to_read(&mut self) -> Result<usize> {
         Ok(self.port.bytes_to_read()? as usize)
     }
@@ -205,6 +250,7 @@ impl Link {
             }
             port.write_all(&data[offset..offset + block])?;
             port.flush()?;
+            trace("TX", &data[offset..offset + block]);
             len -= block;
             offset += block;
         }
@@ -216,12 +262,23 @@ impl Link {
         let mut buf = vec![0u8; len];
         let mut filled = 0;
         while filled < len {
-            let n = self.port.read(&mut buf[filled..])?;
+            let n = match self.port.read(&mut buf[filled..]) {
+                Ok(n) => n,
+                Err(e) if e.kind() == std::io::ErrorKind::TimedOut => {
+                    trace("RX", &buf[..filled]);
+                    return Err(EdError::Other(format!(
+                        "timeout de lecture : la carte n'a renvoyé que {filled}/{len} octets \
+                         (activez EDLINK_TRACE pour voir la trame reçue)"
+                    )));
+                }
+                Err(e) => return Err(e.into()),
+            };
             if n == 0 {
                 return Err(EdError::Other("read timeout".into()));
             }
             filled += n;
         }
+        trace("RX", &buf);
         Ok(buf)
     }
 

@@ -7,10 +7,14 @@ edlink-cli - outil Turbo EverDrive (validation du protocole)
 Usage:
   edlink-cli [--port <PORT>] devinf
   edlink-cli [--port <PORT>] cp <src> <dst>          (dst = sd:chemin ou chemin local)
+  edlink-cli [--port <PORT>] ls [sd:chemin]          (liste un dossier de la carte SD)
   edlink-cli [--port <PORT>] run <rom>               (rom = chemin local ou sd:chemin)
   edlink-cli [--port <PORT>] reset
   edlink-cli [--port <PORT>] screen <out.png>
   edlink-cli [--port <PORT>] memrd <addr-hex> <len> [out.bin]
+
+Astuce : EDLINK_TRACE=1 journalise sur stderr chaque octet émis/reçu
+(utile pour valider un protocole sur matériel réel, ex: `ls`).
 ";
 
 struct Opts {
@@ -69,6 +73,26 @@ fn run() -> Result<()> {
             let t = Instant::now();
             ted.copy_file(&opts.args[0], &opts.args[1])?;
             println!("copy done in {:?}", t.elapsed());
+            Ok(())
+        }
+        "ls" => {
+            let path = opts.args.first().map(String::as_str).unwrap_or("sd:/");
+            let mut ted = Ted::connect(opts.port.as_deref())?;
+            let t = Instant::now();
+            let mut entries = ted.list_dir(path)?;
+            entries.sort_by(|a, b| {
+                b.is_dir.cmp(&a.is_dir).then_with(|| {
+                    a.name.to_lowercase().cmp(&b.name.to_lowercase())
+                })
+            });
+            for e in &entries {
+                if e.is_dir {
+                    println!("  <DIR>  {}/", e.name);
+                } else {
+                    println!("{:>9}  {}", e.size, e.name);
+                }
+            }
+            println!("({} entrée(s), {:?})", entries.len(), t.elapsed());
             Ok(())
         }
         "run" => {

@@ -13,10 +13,12 @@
 //! - reset console (`Ted::reset`)
 //! - capture d'écran du menu (`Ted::screen`, renvoie un PNG)
 //! - lecture mémoire lecture seule (`Ted::mem_rd`)
+//! - listing d'un dossier de la carte SD (`Ted::list_dir`)
 //!
-//! Le protocole n'expose **pas** de listing de dossier SD (limitation de la
-//! référence) : les chemins de destination sont donc fournis explicitement
-//! sous la forme `sd:/chemin/vers/fichier`.
+//! Le listing de dossier utilise la couche FS (`CMD_F_DIR_OPN` / `CMD_F_DIR_RD`)
+//! du firmware MCU partagé des cartes « Pro » : elle n'est pas câblée par
+//! l'`edlink` de référence mais fait partie du protocole du firmware. Voir
+//! `Ted::list_dir` et `docs/PROTOCOL.md`.
 
 pub mod error;
 pub mod image;
@@ -25,7 +27,7 @@ pub mod protocol;
 pub mod ted;
 
 pub use error::{EdError, Result};
-pub use ted::Ted;
+pub use ted::{SdEntry, Ted};
 
 /// Liste les ports série disponibles sur le système.
 pub fn available_ports() -> Result<Vec<String>> {

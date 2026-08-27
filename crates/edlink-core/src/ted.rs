@@ -296,19 +296,70 @@ impl Ted {
     /// `path` peut être un chemin "périphérique" (`sd:/GAMES`) ou nu (`GAMES`,
     /// `/GAMES`). Le dossier racine est `""` ou `/`. Renvoie les entrées
     /// (dossiers et fichiers) avec leur taille.
+    ///
+    /// Protocole (couche FS du firmware MCU partagé des cartes « Pro » —
+    /// EverDrive-N8 Pro / Mega Pro / **Turbo Pro** — d'après `edFirmware`) :
+    ///
+    /// ```text
+    /// TX  CMD_F_DIR_OPN + tx_string(path)      → statut FatFs lu via CMD_STATUS
+    /// puis, en boucle jusqu'à name_len == 0 :
+    /// TX  CMD_F_DIR_RD
+    /// RX  u8  status      FRESULT (0 = OK, sinon erreur)
+    ///     u32 size        taille du fichier (little-endian)
+    ///     u16 date        date FAT (ignorée ici)
+    ///     u16 time        heure FAT (ignorée ici)
+    ///     u8  attrib      attributs FatFs (AM_DIR = dossier)
+    ///     u8  name_len    longueur du nom (0 = fin du dossier)
+    ///     u8  name[name_len]
+    /// ```
+    ///
+    /// La colonne ASCII / le « count » en tête de l'ancienne implémentation
+    /// n'existent pas côté firmware : `f_opendir` ne connaît pas le nombre
+    /// d'entrées d'avance (d'où la commande séparée `CMD_F_DIR_SIZE`).
     pub fn list_dir(&mut self, path: &str) -> Result<Vec<SdEntry>> {
+        let dev = get_dev_path(path);
+        // Une vraie carte SD peut marquer une longue pause (parcours FAT,
+        // latence interne) : on élargit le timeout le temps du listing, puis on
+        // le rétablit — même en cas d'erreur.
+        self.link.set_read_timeout(Link::FS_TIMEOUT)?;
+        let r = self.list_dir_inner(&dev);
+        let _ = self.link.set_read_timeout(Link::OP_TIMEOUT);
+        r
+    }
+
+    fn list_dir_inner(&mut self, dev_path: &str) -> Result<Vec<SdEntry>> {
         self.link.tx_cmd(CMD_F_DIR_OPN)?;
-        self.link.tx_string(&get_dev_path(path))?;
-        let count = self.link.rx32()? as usize;
-        let mut out = Vec::with_capacity(count);
-        for _ in 0..count {
+        self.link.tx_string(dev_path)?;
+        match self.link.status()? {
+            FR_OK => {}
+            // Dossier absent : liste vide plutôt qu'une erreur bloquante.
+            FR_NO_FILE | FR_NO_PATH => return Ok(Vec::new()),
+            code => return Err(EdError::DeviceError(code)),
+        }
+
+        let mut out = Vec::new();
+        loop {
+            self.link.tx_cmd(CMD_F_DIR_RD)?;
+            let status = self.link.rx8()?;
+            if status != FR_OK {
+                return Err(EdError::DeviceError(status));
+            }
+            let size = self.link.rx32()?; // swap_endians = false → little-endian
+            let _date = self.link.rx16()?;
+            let _time = self.link.rx16()?;
+            let attrib = self.link.rx8()?;
             let name_len = self.link.rx8()? as usize;
-            let name = String::from_utf8_lossy(&self.link.rx_data(name_len)?).into_owned();
-            let flags = self.link.rx8()?;
-            let size = self.link.rx32()?;
+            if name_len == 0 {
+                break; // fin du dossier
+            }
+            let name =
+                String::from_utf8_lossy(&self.link.rx_data(name_len)?).into_owned();
+            if name == "." || name == ".." {
+                continue;
+            }
             out.push(SdEntry {
                 name,
-                is_dir: (flags & 1) != 0,
+                is_dir: (attrib & AM_DIR) != 0,
                 size,
             });
         }

@@ -52,6 +52,8 @@ Référence : `Link.cs → GetDeviceConfig()` / `GetID()`.
 | `CMD_F_FCLOSE` | 0xCE | Fermeture fichier | `DeviceIO_V1.FileClose` |
 | `CMD_F_AVB` | 0xD5 | Taille fichier | `DeviceIO_V1.FileAvailable` |
 | `CMD_F_DIR_MK` | 0xD2 | Créer dossier | `DeviceIO_V1.DirMake` |
+| `CMD_F_DIR_OPN` | 0xC3 | Ouvrir dossier | *(non câblé par edlink — cf. ci‑dessous)* |
+| `CMD_F_DIR_RD` | 0xC4 | Lire une entrée | *(non câblé par edlink — cf. ci‑dessous)* |
 
 ### Système de fichiers SD (FatFs-like)
 
@@ -66,6 +68,49 @@ Référence : `Link.cs → GetDeviceConfig()` / `GetID()`.
   (« dossier déjà existant »).
 
 Référence : `DeviceIO_V1.cs` (FileOpen/Read/Write/…).
+
+### Listing de dossiers SD (`CMD_F_DIR_OPN` / `CMD_F_DIR_RD`)
+
+> ⚠️ **Reconstitué, non issu de l'`edlink` de référence.** Les commandes
+> `CMD_F_DIR_*` sont *déclarées* dans `DeviceIO_V1.cs` mais **jamais appelées**
+> (aucune carte n'expose de navigation SD via edlink). L'implémentation ci‑dessous
+> reproduit la couche FS (`f_opendir` / `f_readdir`) du firmware MCU partagé des
+> cartes « Pro ». **À valider sur matériel réel** (voir `EDLINK_TRACE` plus bas).
+
+```text
+TX  CMD_F_DIR_OPN                     trame 4 octets
+TX  u16 len + chemin UTF-8            ("" ou "/" = racine, "/GAMES" = sous-dossier)
+    → résultat : code FatFs lu via CMD_STATUS (comme CMD_F_DIR_MK)
+                 0 = OK ; 4 (NO_FILE) / 5 (NO_PATH) → dossier absent (liste vide)
+
+puis, en boucle jusqu'à name_len == 0 :
+TX  CMD_F_DIR_RD                      trame 4 octets
+RX  u8  status                        FRESULT (0 = OK, sinon erreur → abandon)
+RX  u32 size                          taille du fichier (little-endian)
+RX  u16 date                          date FAT (0 accepté ; ignorée par l'hôte)
+RX  u16 time                          heure FAT (idem)
+RX  u8  attrib                        attributs FatFs — AM_DIR=0x10 → dossier
+RX  u8  name_len                      longueur du nom (0 = fin du dossier)
+RX  u8  name[name_len]                nom (LFN, UTF-8/ASCII)
+```
+
+Pas de `count` en tête (`f_opendir` ne le connaît pas — d'où `CMD_F_DIR_SIZE`
+séparé), pas de fermeture explicite (le `DIR` est réutilisé au prochain `OPN`).
+Les entrées `.` / `..` sont filtrées côté hôte.
+
+**Points à confirmer sur la vraie carte** (si `ls` échoue, la trace le montre) :
+1. `CMD_F_DIR_RD` prend‑il un argument (p. ex. `u16` longueur max de nom) ? Ici : **aucun**.
+2. `CMD_F_DIR_OPN` répond‑il par `CMD_STATUS` (hypothèse retenue) ou par un octet inline ?
+3. Ordre / tailles exacts des champs FILINFO (`size`/`date`/`time`/`attrib`/`name`).
+
+### Trace série (`EDLINK_TRACE`)
+
+`EDLINK_TRACE=1` (variable d'environnement) journalise sur **stderr** chaque
+octet émis/reçu par `edlink-core`. Pour capturer le vrai protocole d'une carte :
+
+```bash
+EDLINK_TRACE=1 edlink-cli --port /dev/cu.usbmodemXXXX ls sd:/GAMES
+```
 
 ### Capture d'écran (menu)
 
@@ -97,8 +142,9 @@ Référence : `DEV_TED/MenuCmd.cs`, `DEV_TED/DeviceIO.cs`, `DeviceCmd.AppDeploy`
   périmètre v1 (sécurité).
 - **RTC sur TED Pro** : la référence lève `UnsupportedCmd`
   (`DEV_TED/DeviceIO.cs → RtcSet/RtcCal`) → non exposé.
-- **Listing de dossiers SD** : les commandes `CMD_F_DIR_*` existent dans le
-  protocole mais ne sont **pas câblées** par `edlink` → chemins explicites.
+- ~~**Listing de dossiers SD**~~ : implémenté (`CMD_F_DIR_OPN` / `CMD_F_DIR_RD`),
+  reconstitué d'après la couche FS du firmware — cf. section dédiée ci‑dessus.
+  À valider sur matériel réel.
 
 ## Tests
 

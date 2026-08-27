@@ -21,7 +21,14 @@ pub const CMD_HOST_RST: u8 = 0x29;
 pub const CMD_STATUS2: u8 = 0x40;
 
 // ---- Commandes système de fichiers (carte SD) ----
-pub const CMD_F_DIR_OPN: u8 = 0xC3; // ouvre un dossier et renvoie son contenu
+//
+// Toutes ces commandes sont servies par la couche FatFs du firmware MCU
+// partagé des cartes « Pro » (EverDrive-N8 Pro / Mega Pro / **Turbo Pro**).
+// L'`edlink` de référence ne câble que `FOPN/FRD/FWR/FCLOSE/AVB/DIR_MK` ; le
+// listing de dossier (`DIR_OPN` + `DIR_RD`) est reconstitué d'après le
+// protocole FS du firmware (cf. docs/PROTOCOL.md § « Listing de dossiers »).
+pub const CMD_F_DIR_OPN: u8 = 0xC3; // f_opendir(path) — statut via CMD_STATUS
+pub const CMD_F_DIR_RD: u8 = 0xC4; // f_readdir() — renvoie une entrée FILINFO
 pub const CMD_F_FOPN: u8 = 0xC9;
 pub const CMD_F_FRD: u8 = 0xCA;
 pub const CMD_F_FWR: u8 = 0xCC;
@@ -34,6 +41,18 @@ pub const FA_READ: u8 = 0x01;
 pub const FA_WRITE: u8 = 0x02;
 pub const FA_CREATE_ALWAYS: u8 = 0x08;
 pub const FS_MAKEPATH: u8 = 0x80;
+
+// ---- Attributs FatFs (`FILINFO.fattrib`) ----
+pub const AM_RDO: u8 = 0x01; // lecture seule
+pub const AM_HID: u8 = 0x02; // caché
+pub const AM_SYS: u8 = 0x04; // système
+pub const AM_DIR: u8 = 0x10; // dossier
+pub const AM_ARC: u8 = 0x20; // archive
+
+// ---- Codes de résultat FatFs (`FRESULT`) utiles ----
+pub const FR_OK: u8 = 0;
+pub const FR_NO_FILE: u8 = 4;
+pub const FR_NO_PATH: u8 = 5;
 
 // ---- Modes reset hôte (Turbo EverDrive) ----
 pub const HOST_RST_OFF: u8 = 0;

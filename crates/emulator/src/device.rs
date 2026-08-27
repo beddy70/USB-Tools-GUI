@@ -42,6 +42,7 @@ const CMD_SYS_INF: u8 = 0x26;
 const CMD_HOST_RST: u8 = 0x29;
 const CMD_STATUS2: u8 = 0x40;
 const CMD_F_DIR_OPN: u8 = 0xC3;
+const CMD_F_DIR_RD: u8 = 0xC4;
 const CMD_F_FOPN: u8 = 0xC9;
 const CMD_F_FRD: u8 = 0xCA;
 const CMD_F_FWR: u8 = 0xCC;
@@ -52,6 +53,11 @@ const CMD_F_AVB: u8 = 0xD5;
 const FA_WRITE: u8 = 0x02;
 const FA_CREATE_ALWAYS: u8 = 0x08;
 const HOST_RST_ON: u8 = 1;
+
+// Attributs / codes FatFs (couche FS du firmware, cf. edlink-core::protocol).
+const AM_DIR: u8 = 0x10;
+const FR_OK: u8 = 0;
+const FR_NO_PATH: u8 = 5;
 
 pub struct Device {
     pub device_id: u8,
@@ -68,6 +74,9 @@ pub struct Device {
     pending_status2: bool,
     open_file: Option<std::fs::File>,
     open_len: u64,
+    /// Itérateur du dossier ouvert par `CMD_F_DIR_OPN` ; consommé une entrée à
+    /// la fois par `CMD_F_DIR_RD` (comme `f_readdir` côté firmware).
+    dir_iter: Option<std::vec::IntoIter<crate::sd::SdEntryData>>,
     fifo_buf: Vec<u8>,
     ram0: Vec<u8>,
     vram: Vec<u8>,
@@ -95,6 +104,7 @@ impl Device {
             pending_status2: false,
             open_file: None,
             open_len: 0,
+            dir_iter: None,
             fifo_buf: Vec::new(),
             ram0,
             vram: vec![0u8; 0x10000],
@@ -128,6 +138,7 @@ impl Device {
         self.pending_status2 = false;
         self.open_file = None;
         self.open_len = 0;
+        self.dir_iter = None;
         self.fifo_buf.clear();
     }
 
@@ -222,7 +233,11 @@ impl Device {
                 CMD_F_DIR_OPN => {
                     let path = read_string(master)?;
                     println!("[cmd] F_DIR_OPN path={path:?}");
-                    self.dir_list(master, &path)?;
+                    self.dir_open(&path);
+                }
+                CMD_F_DIR_RD => {
+                    println!("[cmd] F_DIR_RD");
+                    self.dir_read(master)?;
                 }
                 other => {
                     eprintln!("[emulator] commande inconnue : 0x{other:02X}");
@@ -489,25 +504,48 @@ impl Device {
         };
     }
 
-    /// Répond à `CMD_F_DIR_OPN` : liste le dossier et renvoie au client
-    /// `u32 count` puis, pour chaque entrée, `u8 len`, `len` octets de nom,
-    /// `u8 flags` (bit0 = dossier) et `u32 size`.
-    fn dir_list(&mut self, master: &mut PtyMaster, path: &str) -> io::Result<()> {
-        let entries = match self.sd.read_dir(path) {
-            Ok(list) => list,
-            Err(_) => {
-                // dossier inexistant : liste vide, pas d'erreur
-                master.write_all(&0u32.to_le_bytes())?;
-                return Ok(());
+    /// `CMD_F_DIR_OPN` : ouvre un dossier (équiv. `f_opendir`). Le résultat est
+    /// un code FatFs lu ensuite par le client via `CMD_STATUS` (comme
+    /// `CMD_F_DIR_MK`). Les entrées sont ensuite tirées une à une par
+    /// `CMD_F_DIR_RD`.
+    fn dir_open(&mut self, path: &str) {
+        match self.sd.read_dir(path) {
+            Ok(list) => {
+                self.dir_iter = Some(list.into_iter());
+                self.status = FR_OK;
             }
-        };
-        master.write_all(&(entries.len() as u32).to_le_bytes())?;
-        for e in entries {
-            let name = e.name.as_bytes();
-            master.write_all(&[name.len() as u8])?;
-            master.write_all(name)?;
-            master.write_all(&[if e.is_dir { 1u8 } else { 0u8 }])?;
-            master.write_all(&(e.size.min(u32::MAX as u64) as u32).to_le_bytes())?;
+            Err(_) => {
+                self.dir_iter = None;
+                self.status = FR_NO_PATH;
+            }
+        }
+    }
+
+    /// `CMD_F_DIR_RD` : renvoie l'entrée suivante du dossier ouvert, au format
+    /// FILINFO du firmware :
+    ///   `u8 status`, `u32 size` (LE), `u16 date`, `u16 time`, `u8 attrib`,
+    ///   `u8 name_len`, `name_len` octets de nom.
+    /// Fin de dossier (ou aucun dossier ouvert) : `name_len == 0`.
+    fn dir_read(&mut self, master: &mut PtyMaster) -> io::Result<()> {
+        let next = self.dir_iter.as_mut().and_then(|it| it.next());
+        match next {
+            Some(e) => {
+                let name = e.name.as_bytes();
+                let name = &name[..name.len().min(255)];
+                let attrib = if e.is_dir { AM_DIR } else { 0 };
+                master.write_all(&[FR_OK])?;
+                master.write_all(&(e.size.min(u32::MAX as u64) as u32).to_le_bytes())?;
+                master.write_all(&0u16.to_le_bytes())?; // date FAT
+                master.write_all(&0u16.to_le_bytes())?; // heure FAT
+                master.write_all(&[attrib, name.len() as u8])?;
+                master.write_all(name)?;
+            }
+            None => {
+                // fin du dossier : statut OK, puis FILINFO nul (name_len = 0).
+                // 11 octets : status + size(4) + date(2) + time(2) + attrib + name_len
+                self.dir_iter = None;
+                master.write_all(&[FR_OK, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])?;
+            }
         }
         Ok(())
     }
