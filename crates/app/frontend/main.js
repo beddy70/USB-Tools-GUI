@@ -477,10 +477,13 @@ const updateScreenLabels = (p) => {
   els.scrollXVal.textContent = p.scroll_x;
   els.scrollYVal.textContent = p.scroll_y;
 };
-async function refreshScreen() {
+// `refresh` : true = relire la VRAM/CRAM sur la carte (`*v`) ; false = juste
+// re-rendre l'instantané déjà en mémoire avec les nouveaux réglages (aucun
+// accès carte — c'est un rendu logiciel du plan de tuiles).
+async function refreshScreen(refresh = false) {
   const params = screenParams();
   updateScreenLabels(params);
-  const b64 = await safeInvoke("capture_screen", { params });
+  const b64 = await safeInvoke("capture_screen", { params, refresh });
   if (!b64) return;
   lastScreenB64 = b64;
   els.screenImg.src = "data:image/png;base64," + b64;
@@ -488,12 +491,12 @@ async function refreshScreen() {
 }
 $("screen-btn").addEventListener("click", async () => {
   log("Capture de l'écran…");
-  await refreshScreen();
+  await refreshScreen(true);
   if (lastScreenB64) log("Capture effectuée", "ok");
 });
-// Toute modification d'un réglage recapture la vue en direct.
+// Bouger un réglage re-rend l'image localement (sans relire la carte).
 [els.batW, els.batH, els.resW, els.resH, els.scrollX, els.scrollY]
-  .forEach((el) => el.addEventListener("input", refreshScreen));
+  .forEach((el) => el.addEventListener("input", () => refreshScreen(false)));
 // Affiche les valeurs des curseurs dès le chargement (sans capture).
 updateScreenLabels(screenParams());
 

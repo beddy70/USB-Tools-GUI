@@ -119,8 +119,14 @@ EDLINK_TRACE=1 edlink-cli --port /dev/cu.usbmodemXXXX ls sd:/GAMES
    (`rx32()`) ;
 2. `MemRD(addr, 0x10000)` = **VRAM** (VDC), `MemRD(addr+0x10000, 1024)` =
    **CRAM** (VCE, 512 mots de 16 bits) ;
-3. la capture d'écran convertit VRAM/CRAM → image 320×224 → PNG (port de
-   `DEV_TED/MenuImage.cs`) ; le visualiseur mémoire affiche les octets bruts.
+3. la capture d'écran passe VRAM/CRAM à `make_png` — un **rendu logiciel** du
+   plan de tuiles BG (port étendu de `DEV_TED/MenuImage.cs`) : lecture du BAT,
+   des motifs de tuiles (4 bpp planaire) et de la palette (GRB 3-3-3). Pas de
+   sprites, pas de fenêtre, pas d'effets par ligne. Les réglages BAT /
+   résolution / défilement n'agissent que sur ce rendu — l'app garde le dernier
+   instantané en cache (`AppState.screen_snap`) et ne relit `*v` que sur le
+   bouton « Capturer l'écran » (`capture_screen(refresh = true)`). Le
+   visualiseur mémoire, lui, affiche les octets bruts.
 
 `Ted::vram_dump()` renvoie `(vram, cram)` ; `Ted::screen_opts()` l'utilise.
 **Ne fonctionne que si le menu de la carte est affiché** : le VDC/VCE sont

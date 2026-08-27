@@ -12,6 +12,10 @@ use tauri::{Emitter, Manager, State};
 struct AppState {
     ted: Mutex<Option<Ted>>,
     dropped: Mutex<Vec<String>>,
+    /// Dernier instantané VRAM + CRAM lu par `*v` (capture d'écran). Permet de
+    /// re-rendre l'image avec d'autres réglages (BAT, résolution, défilement)
+    /// sans réinterroger la carte.
+    screen_snap: Mutex<Option<(Vec<u8>, Vec<u8>)>>,
 }
 
 /// Résumé retourné après connexion.
@@ -71,6 +75,7 @@ pub fn run() {
         .manage(AppState {
             ted: Mutex::new(None),
             dropped: Mutex::new(Vec::new()),
+            screen_snap: Mutex::new(None),
         })
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::DragDrop(tauri::DragDropEvent::Drop { paths, .. }) = event
@@ -187,8 +192,8 @@ fn try_connect(port: Option<&str>) -> Result<(Ted, String), EdError> {
 /// Déconnecte (libère la carte).
 #[tauri::command]
 fn disconnect(state: State<'_, AppState>) -> Result<(), String> {
-    let mut guard = state.ted.lock().unwrap();
-    *guard = None;
+    *state.ted.lock().unwrap() = None;
+    *state.screen_snap.lock().unwrap() = None;
     Ok(())
 }
 
@@ -331,10 +336,20 @@ pub struct ScreenParams {
     scroll_y: Option<usize>,
 }
 
-/// Capture l'écran du menu et renvoie l'image PNG encodée en base64.
-/// `params` contient les réglages de visualisation (BAT, résolution, défilement).
+/// Rend l'écran du menu en PNG (base64).
+///
+/// La conversion VRAM/CRAM → image est un **rendu logiciel** (plan de tuiles du
+/// VDC) : les réglages `params` (BAT, résolution, défilement) n'agissent que
+/// dessus, pas sur la carte. On ne relit la VRAM/CRAM (`*v`) que si
+/// `refresh == true` (bouton « Capturer l'écran ») ou si aucun instantané n'est
+/// en cache. Bouger un curseur passe `refresh == false` → re-rendu local, aucun
+/// accès carte.
 #[tauri::command]
-fn capture_screen(state: State<'_, AppState>, params: Option<ScreenParams>) -> Result<String, String> {
+async fn capture_screen(
+    app: tauri::AppHandle,
+    params: Option<ScreenParams>,
+    refresh: Option<bool>,
+) -> Result<String, String> {
     let p = params.unwrap_or_default();
     let opts = edlink_core::image::ScreenOpts {
         bat_w: p.bat_w.unwrap_or(64),
@@ -344,8 +359,23 @@ fn capture_screen(state: State<'_, AppState>, params: Option<ScreenParams>) -> R
         scroll_x: p.scroll_x.unwrap_or(0),
         scroll_y: p.scroll_y.unwrap_or(0),
     };
-    let png = with_ted(&state, |t| t.screen_opts(&opts))?;
-    Ok(base64::Engine::encode(&base64::engine::general_purpose::STANDARD, png))
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<AppState>();
+        let want_fetch =
+            refresh != Some(false) || state.screen_snap.lock().unwrap().is_none();
+        if want_fetch {
+            let fresh = with_ted(&state, |t| t.vram_dump())?;
+            *state.screen_snap.lock().unwrap() = Some(fresh);
+        }
+        let snap = state.screen_snap.lock().unwrap();
+        let (vram, cram) = snap
+            .as_ref()
+            .ok_or("aucune capture disponible — cliquez « Capturer l'écran »")?;
+        let png = edlink_core::image::make_png(vram, cram, &opts).map_err(|e| e.to_string())?;
+        Ok(base64::Engine::encode(&base64::engine::general_purpose::STANDARD, png))
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[derive(Serialize)]
