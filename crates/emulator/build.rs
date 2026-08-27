@@ -26,7 +26,16 @@ fn main() {
         .unwrap_or_default();
     println!("cargo:rustc-env=BUILD_DATE={date}");
 
-    for p in ["../../.git/HEAD", "../../.git/index", "build.rs", "src", "Cargo.toml"] {
+    // `.git/logs/HEAD` bouge à chaque commit / checkout / reset (le reflog) ;
+    // `.git/HEAD` au changement de branche ; `.git/index` à `git add`.
+    for p in [
+        "../../.git/logs/HEAD",
+        "../../.git/HEAD",
+        "../../.git/index",
+        "build.rs",
+        "src",
+        "Cargo.toml",
+    ] {
         println!("cargo:rerun-if-changed={p}");
     }
 }

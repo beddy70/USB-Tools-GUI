@@ -26,7 +26,10 @@ fn emit_build_info() {
         .unwrap_or_default();
     println!("cargo:rustc-env=BUILD_DATE={date}");
 
+    // `.git/logs/HEAD` bouge à chaque commit / checkout / reset (le reflog) ;
+    // `.git/HEAD` au changement de branche ; `.git/index` à `git add`.
     for p in [
+        "../../.git/logs/HEAD",
         "../../.git/HEAD",
         "../../.git/index",
         "build.rs",
