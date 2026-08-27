@@ -139,10 +139,15 @@ la capture d'écran via `AppState.screen_snap`). Consommateurs :
 - **onglet Mémoire** (vues VRAM/CRAM) : octets bruts ;
 - **onglet Sprites** (`frontend/main.js`) : décode la VRAM en **planche de
   cellules 4 bpp** — 8×8 (format tuile de fond : plans aux octets 0/1/16/17 d'un
-  bloc de 32) ou 16×16 (format motif de sprite : 4 plans de 16 mots, bit 15 =
-  pixel gauche ; base = n° de pattern × 64 mots). Les motifs de sprites vivent
-  dans la VRAM (la SATB ne fait que les référencer) : on les repère à l'œil et
-  on lit l'adresse VRAM / le n° de pattern d'une cellule au clic. Décodage
+  bloc de 32) ou une des **6 tailles de sprite du VDC** : 16×16, 16×32, 16×64,
+  32×16, 32×32, 32×64. Le motif d'un bloc 16×16 = 4 plans de 16 mots, bit 15 =
+  pixel gauche, base = n° de pattern × 64 mots. Une sprite plus grande = cw×ch
+  blocs 16×16 **contigus**, rangés colonne par colonne (chaque colonne de haut
+  en bas) : sous-bloc `(cx, cy)` à `base + (cx·ch + cy)·64` mots — convention
+  VDC usuelle (non re-vérifiée sur matériel/GearGraFX, cf. avertissement de
+  l'onglet). Les motifs de sprites vivent dans la VRAM (la SATB ne fait que les
+  référencer) : on les repère à l'œil et on lit l'adresse VRAM / le n° de
+  pattern d'une cellule au clic. Décodage
   100 % côté client (canvas) — les réglages ne relisent jamais la carte.
 
 ### Lancement d'un jeu

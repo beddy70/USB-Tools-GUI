@@ -47,7 +47,7 @@ carte — le tout relié à la cartouche par **USB série** (CDC).
 | **Reset** | Réinitialise la console |
 | **Capture d'écran** | Capture le menu de la carte (VRAM + palette → PNG) |
 | **Visualiseur mémoire** (lecture seule) | RAM HuCard via `memrd` ; VRAM/CRAM via l'instantané `*v` du menu |
-| **Sprites / tuiles VRAM** | Planche de cellules 4 bpp décodées de la VRAM (8×8 fond ou 16×16 sprite), choix de palette, zoom, clic → adresse VRAM + n° de pattern |
+| **Sprites / tuiles VRAM** | Planche de cellules 4 bpp décodées de la VRAM : 8×8 (fond) ou les 6 tailles de sprite du VDC (16×16 à 32×64), choix de palette, zoom, clic → adresse VRAM + n° de pattern |
 
 ## Architecture
 

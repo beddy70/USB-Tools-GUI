@@ -212,16 +212,24 @@
             Décodage de l'instantané VRAM (64 Ko) en grille de cellules 4 bpp.
             Les <strong>motifs de sprites</strong> (comme ceux de fond) sont
             stockés dans la VRAM : repérez-les visuellement, cliquez une cellule
-            pour lire son adresse VRAM et son n° de pattern. Partage l'instantané
-            <span class="mono">*v</span> avec la capture d'écran — menu de la
-            carte affiché.
+            pour lire son adresse VRAM et son n° de pattern. Les 6 tailles de
+            sprite du VDC sont proposées (16×16 à 32×64) : chaque taille
+            regroupe 1 à 8 blocs de 16×16 contigus, colonne par colonne (celle
+            du VDC : bloc <span class="mono">$0000</span> = coin haut-gauche).
+            Partage l'instantané <span class="mono">*v</span> avec la capture
+            d'écran — menu de la carte affiché.
           </p>
 
           <div class="spr-toolbar">
             <label>Cellule
               <select id="spr-cell">
-                <option value="8">8×8 (fond)</option>
-                <option value="16" selected>16×16 (sprite)</option>
+                <option value="8x8">8×8 (fond)</option>
+                <option value="16x16" selected>16×16 (sprite)</option>
+                <option value="16x32">16×32 (sprite)</option>
+                <option value="16x64">16×64 (sprite)</option>
+                <option value="32x16">32×16 (sprite)</option>
+                <option value="32x32">32×32 (sprite)</option>
+                <option value="32x64">32×64 (sprite)</option>
               </select>
             </label>
             <label>Palette

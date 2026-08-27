@@ -1178,10 +1178,24 @@ $("save-screen").addEventListener("click", async () => {
 
   let vram = null;         // Uint8Array(65536)
   let cram = null;         // Uint8Array(1024)
-  let sheet = null;        // OffscreenCanvas-like : canvas natif (cols*cell × rows*cell)
-  let geom = null;         // { cell, cols, rows, total, cellW }
+  let sheet = null;        // canvas natif (cols*cw × rows*ch)
+  let geom = null;         // { spec, cw, ch, cols, rows, total, W, H, wordsPerCell }
   let sel = -1;            // index de cellule sélectionnée
   let capturing = false;
+
+  // Les 6 tailles de sprite du VDC (16×16 à 32×64), + la tuile de fond 8×8.
+  // Une sprite CGX×CGY = cw×ch blocs de 16×16 contigus en VRAM, rangés
+  // colonne par colonne, chaque colonne de haut en bas (convention VDC :
+  // le bloc à l'adresse de base est le coin haut-gauche).
+  const CELL_SIZES = {
+    "8x8": { w: 8, h: 8, bg: true },
+    "16x16": { w: 16, h: 16, cw: 1, ch: 1 },
+    "16x32": { w: 16, h: 32, cw: 1, ch: 2 },
+    "16x64": { w: 16, h: 64, cw: 1, ch: 4 },
+    "32x16": { w: 32, h: 16, cw: 2, ch: 1 },
+    "32x32": { w: 32, h: 32, cw: 2, ch: 2 },
+    "32x64": { w: 32, h: 64, cw: 2, ch: 4 },
+  };
 
   // Palettes : 16 « fond » puis 16 « sprite » (disposition CRAM du VCE).
   for (let p = 0; p < 32; p++) {
@@ -1220,18 +1234,27 @@ $("save-screen").addEventListener("click", async () => {
       | (((word(vram, baseWord + 32 + y) >> s) & 1) << 2)
       | (((word(vram, baseWord + 48 + y) >> s) & 1) << 3);
   }
+  // Sprite composite (cw×ch blocs 16×16, cw/ch dans `spec`) : sous-bloc rangé
+  // colonne par colonne, chaque colonne de haut en bas — cf. CELL_SIZES.
+  function pixelSprite(spec, baseWord, x, y) {
+    const subCol = (x / 16) | 0, subRow = (y / 16) | 0;
+    const subIdx = subCol * spec.ch + subRow;
+    return pixel16(baseWord + subIdx * 64, x % 16, y % 16);
+  }
 
   function buildSheet() {
     if (!vram || !cram) { sheet = null; return; }
-    const cell = +elCell.value;
+    const spec = CELL_SIZES[elCell.value] || CELL_SIZES["16x16"];
     const cols = Math.max(1, Math.min(64, +elCols.value || 16));
-    const bytesPerCell = cell === 8 ? 32 : 128;
+    const wordsPerCell = spec.bg ? 0 : spec.cw * spec.ch * 64;
+    const bytesPerCell = spec.bg ? 32 : wordsPerCell * 2;
     const total = Math.floor(vram.length / bytesPerCell);
     const rows = Math.ceil(total / cols);
     const pal = +elPal.value;
     const transp = elTransp.checked;
 
-    const W = cols * cell, H = rows * cell;
+    const cw = spec.w, ch = spec.h;
+    const W = cols * cw, H = rows * ch;
     sheet = document.createElement("canvas");
     sheet.width = W; sheet.height = H;
     const sctx = sheet.getContext("2d");
@@ -1242,12 +1265,12 @@ $("save-screen").addEventListener("click", async () => {
     for (let i = 0; i < 16; i++) lut.push(palRGBA(pal, i));
 
     for (let c = 0; c < total; c++) {
-      const cx = (c % cols) * cell, cy = Math.floor(c / cols) * cell;
-      const base = cell === 8 ? c * 32 : c * 64; // octets (8×8) ou mots (16×16)
-      for (let y = 0; y < cell; y++) {
-        for (let x = 0; x < cell; x++) {
-          const ci = cell === 8 ? pixel8(base, x, y) : pixel16(base, x, y);
-          const o = ((cy + y) * W + (cx + x)) * 4;
+      const ox = (c % cols) * cw, oy = Math.floor(c / cols) * ch;
+      const base = spec.bg ? c * 32 : c * wordsPerCell; // octets (fond) ou mots (sprite)
+      for (let y = 0; y < ch; y++) {
+        for (let x = 0; x < cw; x++) {
+          const ci = spec.bg ? pixel8(base, x, y) : pixelSprite(spec, base, x, y);
+          const o = ((oy + y) * W + (ox + x)) * 4;
           const [r, g, b] = lut[ci];
           d[o] = r; d[o + 1] = g; d[o + 2] = b;
           d[o + 3] = (transp && ci === 0) ? 0 : 255;
@@ -1255,7 +1278,7 @@ $("save-screen").addEventListener("click", async () => {
       }
     }
     sctx.putImageData(img, 0, 0);
-    geom = { cell, cols, rows, total, W, H };
+    geom = { spec, cw, ch, cols, rows, total, W, H, wordsPerCell };
   }
 
   function paint() {
@@ -1275,18 +1298,18 @@ $("save-screen").addEventListener("click", async () => {
     if (elGrid.checked && z >= 2) {
       ctx.strokeStyle = "rgba(255,255,255,0.18)";
       ctx.lineWidth = 1;
-      const step = geom.cell * z;
+      const sx = geom.cw * z, sy = geom.ch * z;
       ctx.beginPath();
-      for (let gx = 0; gx <= geom.cols; gx++) { ctx.moveTo(gx * step + 0.5, 0); ctx.lineTo(gx * step + 0.5, cv.height); }
-      for (let gy = 0; gy <= geom.rows; gy++) { ctx.moveTo(0, gy * step + 0.5); ctx.lineTo(cv.width, gy * step + 0.5); }
+      for (let gx = 0; gx <= geom.cols; gx++) { ctx.moveTo(gx * sx + 0.5, 0); ctx.lineTo(gx * sx + 0.5, cv.height); }
+      for (let gy = 0; gy <= geom.rows; gy++) { ctx.moveTo(0, gy * sy + 0.5); ctx.lineTo(cv.width, gy * sy + 0.5); }
       ctx.stroke();
     }
     if (sel >= 0 && sel < geom.total) {
-      const step = geom.cell * z;
-      const sx = (sel % geom.cols) * step, sy = Math.floor(sel / geom.cols) * step;
+      const sx = geom.cw * z, sy = geom.ch * z;
+      const px = (sel % geom.cols) * sx, py = Math.floor(sel / geom.cols) * sy;
       ctx.strokeStyle = "#22e0ff";
       ctx.lineWidth = 2;
-      ctx.strokeRect(sx + 1, sy + 1, step - 2, step - 2);
+      ctx.strokeRect(px + 1, py + 1, sx - 2, sy - 2);
     }
   }
 
@@ -1294,8 +1317,9 @@ $("save-screen").addEventListener("click", async () => {
 
   function updateStatus() {
     if (!geom) { elStatus.textContent = ""; return; }
+    const label = geom.spec.bg ? "8×8" : `${geom.spec.w}×${geom.spec.h}`;
     elStatus.textContent =
-      `${geom.total} cellules ${geom.cell}×${geom.cell} · ${geom.cols}×${geom.rows} · VRAM 64 Ko`;
+      `${geom.total} cellules ${label} · ${geom.cols}×${geom.rows} · VRAM 64 Ko`;
   }
 
   function selectAt(clientX, clientY) {
@@ -1303,16 +1327,23 @@ $("save-screen").addEventListener("click", async () => {
     const r = cv.getBoundingClientRect();
     const z = +elZoom.value;
     const px = (clientX - r.left) / z, py = (clientY - r.top) / z;
-    const cx = Math.floor(px / geom.cell), cy = Math.floor(py / geom.cell);
+    const cx = Math.floor(px / geom.cw), cy = Math.floor(py / geom.ch);
     if (cx < 0 || cx >= geom.cols || cy < 0) return;
     const idx = cy * geom.cols + cx;
     if (idx < 0 || idx >= geom.total) return;
     sel = idx;
-    const wordAddr = geom.cell === 8 ? idx * 16 : idx * 64;
-    const byteAddr = wordAddr * 2;
     const hex = (n) => "$" + n.toString(16).toUpperCase();
-    let msg = `Cellule #${idx} · VRAM ${hex(wordAddr)} (mot) / ${hex(byteAddr)} (octet)`;
-    if (geom.cell === 16) msg += ` · pattern sprite #${idx}  (SATB : addr ÷ 64)`;
+    let msg;
+    if (geom.spec.bg) {
+      const wordAddr = idx * 16, byteAddr = wordAddr * 2;
+      msg = `Cellule #${idx} · VRAM ${hex(wordAddr)} (mot) / ${hex(byteAddr)} (octet)`;
+    } else {
+      const baseWord = idx * geom.wordsPerCell;
+      const patternBase = baseWord / 64; // n° de pattern SATB (unité 16×16)
+      const nBlocks = geom.spec.cw * geom.spec.ch;
+      msg = `Sprite #${idx} · VRAM ${hex(baseWord)} (mot de base) · pattern SATB #${patternBase}`
+        + (nBlocks > 1 ? ` (+${nBlocks - 1} bloc(s) 16×16 contigus)` : "");
+    }
     elInfo.textContent = msg;
     paint();
   }
