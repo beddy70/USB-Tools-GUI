@@ -71,8 +71,17 @@ fn run() -> Result<()> {
             }
             let mut ted = Ted::connect(opts.port.as_deref())?;
             let t = Instant::now();
-            ted.copy_file(&opts.args[0], &opts.args[1])?;
-            println!("copy done in {:?}", t.elapsed());
+            let mut last = Instant::now();
+            ted.copy_file_with_progress(&opts.args[0], &opts.args[1], |done, total| {
+                if total > 0 && (done >= total || last.elapsed().as_millis() >= 100) {
+                    last = Instant::now();
+                    let pct = done * 100 / total;
+                    eprint!("\r  {pct:3}%  ({done}/{total} o)   ");
+                }
+            })?;
+            let dt = t.elapsed();
+            eprintln!();
+            println!("copy done in {dt:?}");
             Ok(())
         }
         "ls" => {

@@ -11,6 +11,8 @@ const els = {
   crumbs: $("crumbs"), explorer: $("explorer"), explorerEmpty: $("explorer-empty"),
   explorerStatus: $("explorer-status"),
   explorerUp: $("explorer-up"), explorerRefresh: $("explorer-refresh"), explorerImport: $("explorer-import"),
+  transferBar: $("transfer-bar"), transferLabel: $("transfer-label"),
+  transferPct: $("transfer-pct"), transferFill: $("transfer-fill"),
   viewIcons: $("view-icons"), viewList: $("view-list"),
   romPath: $("rom-path"), screenCard: $("screen-card"), screenImg: $("screen-img"),
   batW: $("bat-w"), batH: $("bat-h"), resW: $("res-w"), resH: $("res-h"),
@@ -344,6 +346,45 @@ event.listen("files-dropped", (evt) => {
   if (files.length) uploadAll(files);
 });
 
+// ---- barre de progression des transferts (événement backend) ----
+let transferHideTimer = null;
+event.listen("transfer-progress", (evt) => {
+  const p = evt.payload || {};
+  const bar = els.transferBar;
+  if (transferHideTimer) { clearTimeout(transferHideTimer); transferHideTimer = null; }
+  bar.hidden = false;
+  bar.classList.remove("done", "err");
+  const verb = p.dir === "download" ? "Téléchargement" : "Envoi";
+  const fill = els.transferFill;
+
+  if (p.phase === "start") {
+    els.transferLabel.textContent = `${verb} · ${p.name}`;
+    els.transferPct.textContent = "…";
+    fill.classList.add("indeterminate");
+    fill.style.width = "";
+  } else if (p.phase === "progress") {
+    els.transferLabel.textContent = `${verb} · ${p.name}`;
+    if (p.total > 0) {
+      fill.classList.remove("indeterminate");
+      const pct = Math.min(100, Math.round((p.done / p.total) * 100));
+      fill.style.width = pct + "%";
+      els.transferPct.textContent = `${pct}% · ${fmtSize(p.done)} / ${fmtSize(p.total)}`;
+    }
+  } else if (p.phase === "done") {
+    fill.classList.remove("indeterminate");
+    fill.style.width = "100%";
+    els.transferPct.textContent = "Terminé";
+    bar.classList.add("done");
+    transferHideTimer = setTimeout(() => { bar.hidden = true; }, 2500);
+  } else if (p.phase === "error") {
+    fill.classList.remove("indeterminate");
+    els.transferPct.textContent = "Échec";
+    bar.classList.add("err");
+    // L'erreur détaillée est déjà journalisée par safeInvoke (retour de commande).
+    transferHideTimer = setTimeout(() => { bar.hidden = true; }, 5000);
+  }
+});
+
 async function doDownloadSd(full) {
   const local = await safeInvoke("pick_save", { default_name: full.split("/").pop() || "fichier.bin" });
   if (!local) return;
@@ -380,21 +421,14 @@ els.explorerImport.addEventListener("click", async () => {
 });
 
 // ---------------------------------------------------------------- jouer
+// « Choisir et lancer… » : sélectionne une ROM puis la déploie et la lance
+// directement (les boutons « Charger » et « Lancer » séparés ont été supprimés).
 $("pick-rom").addEventListener("click", async () => {
   const picked = await safeInvoke("pick_file");
   if (!picked) return;
   els.romPath.value = picked;
-  // « Parcourir… » charge aussi la ROM en mémoire (le bouton « Charger » a été supprimé).
-  const res = await safeInvoke("load_rom", { rom: picked });
-  if (res && !res.isErr) {
-    log("Jeu chargé en mémoire ✔", "ok");
-    if (invalidateMemCache) invalidateMemCache(); // afficher la ROM dans l'onglet Mémoire
-  }
-});
-$("run-btn").addEventListener("click", async () => {
-  const rom = els.romPath.value.trim();
-  if (!rom) { log("Choisissez une ROM", "err"); return; }
-  const res = await safeInvoke("run_rom", { rom });
+  log(`Lancement de ${picked.split(/[\\/]/).pop()}…`);
+  const res = await safeInvoke("run_rom", { rom: picked });
   if (res && !res.isErr) {
     log("Jeu lancé ✔", "ok");
     if (invalidateMemCache) invalidateMemCache(); // la RAM contient désormais le jeu

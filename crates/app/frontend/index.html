@@ -30,7 +30,7 @@
           <button class="tab-btn" data-tab="play"><span>🎮</span> Jouer</button>
           <button class="tab-btn" data-tab="memory"><span>🧠</span> Mémoire</button>
         </nav>
-        <div class="sidebar-footer">v0.1.0 · M1</div>
+        <div class="sidebar-footer">v0.1.0 · M2</div>
       </aside>
 
       <main class="content">
@@ -73,6 +73,13 @@
               <p><strong>Glissez-déposez</strong> des fichiers ici pour les envoyer sur la carte,<br />ou cliquez sur « 📂 Importer… ».</p>
             </div>
           </div>
+          <div class="transfer-bar" id="transfer-bar" hidden>
+            <div class="transfer-head">
+              <span class="transfer-label" id="transfer-label">Transfert…</span>
+              <span class="transfer-pct" id="transfer-pct"></span>
+            </div>
+            <div class="transfer-track"><div class="transfer-fill" id="transfer-fill"></div></div>
+          </div>
           <div class="explorer-status" id="explorer-status"></div>
         </section>
 
@@ -82,8 +89,7 @@
           <div class="row">
             <label for="rom-path">ROM (local ou sd:chemin)</label>
             <input id="rom-path" type="text" placeholder="Choisir via le bouton…" readonly />
-            <button class="btn ghost" id="pick-rom">Parcourir…</button>
-            <button class="btn primary" id="run-btn">▶ Lancer</button>
+            <button class="btn primary" id="pick-rom">▶ Choisir et lancer…</button>
           </div>
           <div class="row">
             <button class="btn warning" id="reset-btn">⟲ Reset console</button>

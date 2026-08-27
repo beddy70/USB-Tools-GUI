@@ -8,10 +8,10 @@ Il permet de gérer les fichiers sur la carte SD, de lancer des ROMs, de
 réinitialiser la console, de capturer l'écran du menu et de lire l'état de la
 carte — le tout relié à la cartouche par **USB série** (CDC).
 
-> ⚠️ **État : M1 (fondations).** Le protocole et l'interface graphique sont
-> implémentés. La validation sur matériel requiert que le **menu OS** de la
-> cartouche soit affiché et la console alimentée (voir [Vérification
-> matérielle](#vérification-matérielle)).
+> ⚠️ **État : M2.** Protocole, interface graphique, listing SD et transferts
+> asynchrones avec barre de progression sont implémentés. La validation sur
+> matériel requiert que le **menu OS** de la cartouche soit affiché et la
+> console alimentée (voir [Vérification matérielle](#vérification-matérielle)).
 
 ---
 
@@ -195,16 +195,14 @@ reçu (test `probe`), vérifiez :
   trame réelle et ajuster — cf. `docs/PROTOCOL.md`).
 - **TED Pro non compatible RTC** via `edlink` (`RtcSet`/`RtcCal` lèvent
   `UnsupportedCmd`) : le RTC n'est pas exposé.
-- Les transferts sont **synchromes** et peuvent brièvement geler l'interface
-  pour de gros fichiers (améliorer vers des opérations asynchrones + barre de
-  progression).
 - Non testé sur matériel tant que le menu OS n'est pas accessible.
 
 ## Feuille de route
 
 - **M1 ✅** Fondations : workspace, protocole, CLI, app Tauri, frontend
   retrowave, connexion, infos, transferts, run, reset, capture, memrd.
-- **M2** Asynchrone + barre de progression ; listing SD via `CMD_F_DIR_*`.
+- **M2 ✅** Listing SD via `CMD_F_DIR_*` ; transferts asynchrones (thread dédié,
+  interface réactive) + barre de progression (événement `transfer-progress`).
 - **M3** Sauvegarde/chargement de HuCard complète (via `memrd`/`memwr`), tests
   de vitesse USB (`usbspd`), diagnostics (`diag`).
 - **M4** Packager/icônes finales, intégration continue, validations multiplateforme.

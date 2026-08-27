@@ -285,9 +285,21 @@ impl Link {
     /// Écrit des données avec accusé de réception par blocs (utilisé par
     /// l'écriture de fichiers / FIFO / flash).
     pub fn tx_data_ack(&mut self, data: &[u8]) -> Result<()> {
+        self.tx_data_ack_progress(data, |_, _| {})
+    }
+
+    /// Comme [`Self::tx_data_ack`], en appelant `progress(octets_émis, total)`
+    /// après chaque bloc acquitté (barre de progression d'un upload).
+    pub fn tx_data_ack_progress<P: FnMut(u64, u64)>(
+        &mut self,
+        data: &[u8],
+        mut progress: P,
+    ) -> Result<()> {
         let ack_block_size = 1024;
+        let total = data.len() as u64;
         let mut offset = 0;
         let mut len = data.len();
+        progress(0, total);
         while len > 0 {
             let resp = self.rx8()?;
             if resp != 0 {
@@ -297,6 +309,7 @@ impl Link {
             self.tx_data(&data[offset..offset + block])?;
             len -= block;
             offset += block;
+            progress(offset as u64, total);
         }
         Ok(())
     }

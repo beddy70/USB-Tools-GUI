@@ -63,11 +63,24 @@ vraie carte.
 
 ## Concurrence & état
 
-L'app garde un `Option<Ted>` dans un `Mutex` géré par Tauri. Les commandes sont
-**synchrones** (elles s'exécutent sur le fil principal). Conséquence : un gros
-transfert de fichiers gèle brièvement l'interface. **Amélioration prévue** :
-exécuter les opérations longue durée dans des threads et publier des événements
-de progression, sans tenir le `Mutex` pendant le transfert.
+L'app garde un `Option<Ted>` dans un `Mutex` géré par Tauri. La plupart des
+commandes sont **synchrones** (exécutées sur le fil principal) : acceptable pour
+les opérations courtes (infos, reset, listing, `memrd`).
+
+Les transferts de fichiers (`upload` / `download`), eux, durent plusieurs
+secondes. Ce sont des commandes **asynchrones** : le travail bloquant est confié
+à un thread dédié via `tauri::async_runtime::spawn_blocking`, ce qui garde
+l'interface réactive. La progression est publiée au fil du transfert par
+l'événement **`transfer-progress`** (`{ phase, dir, name, done, total, error }` ;
+`phase` ∈ `start` / `progress` / `done` / `error`), throttlé à ~40 ms côté
+backend. Le `Mutex` `ted` reste tenu pendant toute la copie : les opérations
+carte sont donc sérialisées (une seule à la fois), ce qui est le comportement
+voulu pour un lien série unique.
+
+Le rappel de progression traverse `edlink-core` :
+`Ted::copy_file_with_progress` → `file_read` / `file_write` →
+`Link::tx_data_ack_progress`, chacun appelant `progress(octets_faits, total)`
+après chaque bloc. `Ted::copy_file` reste un raccourci sans rappel.
 
 ## Recevoir des fichiers (glisser‑déposer)
 

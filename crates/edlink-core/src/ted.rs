@@ -369,11 +369,24 @@ impl Ted {
     /// Copie un fichier : host -> SD ou SD -> host selon les préfixes
     /// (`sd:` = chemin sur la carte).
     pub fn copy_file(&mut self, src: &str, dst: &str) -> Result<()> {
+        self.copy_file_with_progress(src, dst, |_, _| {})
+    }
+
+    /// Comme [`Self::copy_file`], en signalant la progression de la phase lente
+    /// (échange avec la carte) : lecture SD pour un téléchargement, écriture SD
+    /// pour un envoi. `progress` reçoit `(octets_traités, octets_total)` ; il
+    /// est appelé une première fois à `(0, total)` puis après chaque bloc.
+    pub fn copy_file_with_progress(
+        &mut self,
+        src: &str,
+        dst: &str,
+        mut progress: impl FnMut(u64, u64),
+    ) -> Result<()> {
         let buff: Vec<u8>;
         if is_dev_path(src) {
             self.file_open(&get_dev_path(src), FA_READ)?;
             let avail = self.file_available()? as usize;
-            buff = self.file_read(avail)?;
+            buff = self.file_read(avail, &mut progress)?;
             self.file_close()?;
         } else {
             buff = std::fs::read(src)
@@ -385,7 +398,7 @@ impl Ted {
                 &get_dev_path(dst),
                 FA_WRITE | FA_CREATE_ALWAYS | FS_MAKEPATH,
             )?;
-            self.file_write(&buff)?;
+            self.file_write(&buff, &mut progress)?;
             self.file_close()?;
         } else {
             if let Some(parent) = Path::new(dst).parent() {
@@ -419,11 +432,16 @@ impl Ted {
         Ok(lo | (hi << 32))
     }
 
-    fn file_read(&mut self, total_len: usize) -> Result<Vec<u8>> {
+    fn file_read<P: FnMut(u64, u64)>(
+        &mut self,
+        total_len: usize,
+        mut progress: P,
+    ) -> Result<Vec<u8>> {
         self.link.tx_cmd(CMD_F_FRD)?;
         self.link.tx32(total_len as u32)?;
         let mut out = Vec::with_capacity(total_len);
         let mut remaining = total_len;
+        progress(0, total_len as u64);
         while remaining > 0 {
             let block = remaining.min(4096);
             let ack = self.link.rx8()?;
@@ -433,14 +451,19 @@ impl Ted {
             let data = self.link.rx_data(block)?;
             out.extend_from_slice(&data);
             remaining -= block;
+            progress(out.len() as u64, total_len as u64);
         }
         Ok(out)
     }
 
-    fn file_write(&mut self, data: &[u8]) -> Result<()> {
+    fn file_write<P: FnMut(u64, u64)>(
+        &mut self,
+        data: &[u8],
+        progress: P,
+    ) -> Result<()> {
         self.link.tx_cmd(CMD_F_FWR)?;
         self.link.tx32(data.len() as u32)?;
-        self.link.tx_data_ack(data)?;
+        self.link.tx_data_ack_progress(data, progress)?;
         self.link.check_status()
     }
 

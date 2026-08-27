@@ -22,6 +22,19 @@ struct DeviceInfo {
     info: String,
 }
 
+/// Événement de progression d'un transfert, émis vers le frontend sous le nom
+/// `transfer-progress`. Une session émet : une phase `start`, N phases
+/// `progress` (throttlées), puis `done` ou `error`.
+#[derive(Serialize, Clone)]
+struct TransferProgress {
+    phase: &'static str, // "start" | "progress" | "done" | "error"
+    dir: &'static str,   // "upload" | "download"
+    name: String,
+    done: u64,
+    total: u64,
+    error: Option<String>,
+}
+
 #[derive(Serialize)]
 struct MemDump {
     addr: u32,
@@ -157,27 +170,88 @@ fn get_info(state: State<'_, AppState>) -> Result<String, String> {
 }
 
 /// Téléverse un fichier local vers la carte SD.
+///
+/// Commande **asynchrone** : le transfert (bloquant, plusieurs secondes) tourne
+/// sur un thread dédié via `spawn_blocking`, ce qui laisse l'interface réactive.
+/// La progression est publiée via l'événement `transfer-progress`.
 #[tauri::command]
-fn upload(
-    state: State<'_, AppState>,
+async fn upload(
+    app: tauri::AppHandle,
     local: String,
     dest: String,
 ) -> Result<String, String> {
     let dest = normalize_sd_path(&dest);
-    with_ted(&state, |t| t.copy_file(&local, &dest))
-        .map(|_| format!("Uploadé vers {dest}"))
+    let name = base_name(&dest);
+    let (src, dst) = (local, dest.clone());
+    tauri::async_runtime::spawn_blocking(move || {
+        run_transfer(&app, "upload", name, &src, &dst)
+    })
+    .await
+    .map_err(|e| e.to_string())??;
+    Ok(format!("Uploadé vers {dest}"))
 }
 
-/// Télécharge un fichier de la carte SD vers le local.
+/// Télécharge un fichier de la carte SD vers le local. Voir [`upload`] pour le
+/// modèle d'exécution (thread dédié + événements `transfer-progress`).
 #[tauri::command]
-fn download(
-    state: State<'_, AppState>,
+async fn download(
+    app: tauri::AppHandle,
     src: String,
     local: String,
 ) -> Result<String, String> {
     let src = normalize_sd_path(&src);
-    with_ted(&state, |t| t.copy_file(&src, &local))
-        .map(|_| format!("Téléchargé de {src} vers {local}"))
+    let name = base_name(&src);
+    let (dev, dst) = (src.clone(), local.clone());
+    tauri::async_runtime::spawn_blocking(move || {
+        run_transfer(&app, "download", name, &dev, &dst)
+    })
+    .await
+    .map_err(|e| e.to_string())??;
+    Ok(format!("Téléchargé de {src} vers {local}"))
+}
+
+/// Exécute une copie `src` -> `dst` (sur un thread bloquant) en émettant les
+/// événements `transfer-progress` : une phase `start`, N phases `progress`
+/// (throttlées à ~40 ms), puis `done` ou `error`.
+///
+/// Le verrou `ted` est tenu pendant tout le transfert, ce qui sérialise
+/// naturellement les opérations carte (une seule à la fois).
+fn run_transfer(
+    app: &tauri::AppHandle,
+    dir: &'static str,
+    name: String,
+    src: &str,
+    dst: &str,
+) -> Result<(), String> {
+    let state = app.state::<AppState>();
+    let emit = |phase: &'static str, done: u64, total: u64, error: Option<String>| {
+        let _ = app.emit(
+            "transfer-progress",
+            TransferProgress { phase, dir, name: name.clone(), done, total, error },
+        );
+    };
+
+    emit("start", 0, 0, None);
+    let mut last = std::time::Instant::now();
+    let res = with_ted(&state, |t| {
+        t.copy_file_with_progress(src, dst, |done, total| {
+            if done >= total || last.elapsed().as_millis() >= 40 {
+                last = std::time::Instant::now();
+                emit("progress", done, total, None);
+            }
+        })
+    });
+
+    match res {
+        Ok(()) => {
+            emit("done", 0, 0, None);
+            Ok(())
+        }
+        Err(e) => {
+            emit("error", 0, 0, Some(e.clone()));
+            Err(e)
+        }
+    }
 }
 
 /// Liste le contenu d'un dossier de la carte SD.
@@ -303,6 +377,15 @@ fn clear_dropped(state: State<'_, AppState>) -> Result<(), String> {
     let mut guard = state.dropped.lock().unwrap();
     guard.clear();
     Ok(())
+}
+
+/// Dernier segment d'un chemin (SD ou local), pour l'affichage.
+fn base_name(p: &str) -> String {
+    p.trim_end_matches('/')
+        .rsplit(['/', '\\'])
+        .next()
+        .unwrap_or(p)
+        .to_string()
 }
 
 /// Ajoute le préfixe `sd:/` si le chemin n'en a pas déjà un.
