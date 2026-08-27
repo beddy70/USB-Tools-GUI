@@ -42,8 +42,8 @@ const RES_H_CHOICES = [224, 240];      // hauteur d'affichage en px
 let invalidateMemCache = null;
 
 // Renseignée par le visualiseur mémoire : (ré)applique la politique de lecture
-// selon la cible (émulateur = lectures libres ; matériel réel = mode
-// conservateur, VRAM/CRAM masquées). Appelée après chaque (dé)connexion.
+// de la vue RAM selon la cible (émulateur = lectures libres ; matériel réel =
+// mode conservateur). Appelée après chaque (dé)connexion.
 let configureMemForDevice = null;
 
 // Vrai uniquement quand l'hôte parle à l'émulateur virtuel. Sur matériel réel,
@@ -132,7 +132,7 @@ async function doConnect() {
   isEmulator = !!info.is_emulator;
   log(`Nom: ${info.name} · Port: ${info.port}${isEmulator ? " · émulateur" : ""}`, "info");
   if (!isEmulator) {
-    log("Matériel réel : le visualiseur mémoire est en mode conservateur (VRAM/CRAM masquées, pas de lecture automatique). Chaque lecture gèle brièvement la console.", "info");
+    log("Matériel réel : la vue Mémoire est en mode conservateur (pas de lecture auto, clic « Rafraîchir »). VRAM/CRAM = instantané via le menu de la carte.", "info");
   }
   if (configureMemForDevice) configureMemForDevice(isEmulator);
   // Sur l'émulateur, la mémoire est observable sans coût : on relit tout de
@@ -513,8 +513,11 @@ $("save-screen").addEventListener("click", async () => {
 (() => {
   const LINE_H = 18;
 
-  // Liste des vues de l'onglet Mémoire. Les adresses de fenêtre VRAM/CRAM
-  // correspondent aux fenêtres exposées par l'émulateur (device.rs).
+  // Liste des vues de l'onglet Mémoire.
+  //  - RAM : lue par blocs via CMD_MEM_RD (bus cartouche).
+  //  - VRAM / CRAM : instantané via la commande FIFO `*v` du menu OS (même
+  //    routine que la capture d'écran). `snap: true` → servi depuis le buffer
+  //    en mémoire, offsets relatifs à 0.
   const VIEWS = {
     ram: {
       label: "Mémoire (vue actuelle)",
@@ -528,24 +531,31 @@ $("save-screen").addEventListener("click", async () => {
     },
     vram: {
       label: "VRAM (VDC)",
-      start: 0x02000000,        // fenêtre VRAM côté émulateur
+      start: 0,
       size:  0x10000,           // 64 Ko = 32 768 mots de 16 bits
       word16: true,
       unitsPerRow: 16,          // 16 mots par ligne (= 32 octets)
       noAscii: true,            // pas de colonne ASCII (inutile pour des mots vidéo)
       showVectors: false,
+      snap: true,
     },
     cram: {
       label: "CRAM (VCE)",
-      start: 0x02010000,        // fenêtre CRAM côté émulateur
+      start: 0,
       size:  0x400,             // 512 mots de 16 bits = 1 024 octets
       word16: true,
       unitsPerRow: 8,           // 8 mots par ligne ; 1 palette = 2 lignes (16 mots)
       groupBytes: 0x20,         // 32 octets = une palette (16 mots) → en-tête "palette"
       swatches: true,           // colonne de droite = carrés de couleur (au lieu de l'ASCII)
       showVectors: false,
+      snap: true,
     },
   };
+
+  // Instantanés VRAM / CRAM (Uint8Array) obtenus par `*v`. null = pas encore lu.
+  let vramSnap = null, cramSnap = null;
+  const snapView = () => !!cur.snap;
+  const b64ToBytes = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
 
   // ----- éléments DOM -----
   const view     = $("hex-view");
@@ -560,11 +570,11 @@ $("save-screen").addEventListener("click", async () => {
   const hexWrap = view.closest(".hex-wrap");
   const hexHead = hHex ? hHex.parentElement : null;
 
-  // ----- politique de lecture selon la cible -----
+  // ----- politique de lecture de la vue RAM selon la cible -----
   // "emu" : lectures libres (mémoire observée hors bus cartouche).
   // "hw"  : matériel réel — chaque CMD_MEM_RD gèle le CPU PC-Engine le temps du
-  //         transfert. On lit par petits blocs, jamais automatiquement, et on
-  //         masque VRAM/CRAM (fenêtres propres à l'émulateur).
+  //         transfert. On lit par petits blocs et jamais automatiquement.
+  // (VRAM/CRAM ne sont pas concernées : instantané `*v`, cf. plus bas.)
   let readMode = "hw";           // défaut prudent tant que rien n'est connecté
   let autoLoad = false;          // charger les chunks visibles au défilement ?
   const memWarnEl = $("mem-warning");
@@ -605,14 +615,16 @@ $("save-screen").addEventListener("click", async () => {
     }
     if (cur === VIEWS.vram) {
       return 'VRAM (VDC) : mémoire vidéo de 64 Ko, mots de 16 bits (32 768 mots). ' +
-        'Fenêtre hôte <span class="mono">$02000000</span> → <span class="mono">$0200FFFF</span>.';
+        'Instantané pris via la commande <span class="mono">*v</span> du menu OS ' +
+        '(comme la capture d\'écran) — nécessite <b>le menu de la carte affiché</b>. ' +
+        '« 🔄 Rafraîchir » reprend un instantané.';
     }
     if (cur === VIEWS.cram) {
       return 'CRAM (VCE) : palette couleur, 32 palettes de 16 couleurs (512 mots de 16 bits). ' +
         'Les <b>Palette 0–15</b> servent aux tuiles, les <b>Palette sprite 0–15</b> aux sprites. ' +
         'Chaque mot code une couleur : <span class="mono">bits 8-6 = G</span>, ' +
         '<span class="mono">5-3 = R</span>, <span class="mono">2-0 = B</span>. ' +
-        'Fenêtre hôte <span class="mono">$02010000</span> → <span class="mono">$020103FF</span>.';
+        'Instantané via <span class="mono">*v</span> (menu de la carte affiché).';
     }
   }
 
@@ -656,9 +668,11 @@ $("save-screen").addEventListener("click", async () => {
     } else {
       TOTAL_LINES = SIZE / BYTES_PER_ROW;
     }
-    // Bloc de lecture : 8 Ko sur l'émulateur, 1 Ko sur matériel réel (le gel du
-    // CPU PC-Engine est ~proportionnel à la taille du transfert).
-    CHUNK = Math.min(readMode === "emu" ? 0x2000 : 0x400, SIZE);
+    // Bloc de lecture. VRAM/CRAM : servis depuis un instantané en mémoire, la
+    // taille n'a pas d'incidence → 8 Ko. RAM (bus cartouche) : 8 Ko sur
+    // l'émulateur, 1 Ko sur matériel réel (le gel du CPU PC-Engine est
+    // ~proportionnel à la taille du transfert).
+    CHUNK = Math.min(cur.snap || readMode === "emu" ? 0x2000 : 0x400, SIZE);
     CHUNK_CNT = Math.ceil(SIZE / CHUNK);
     SWATCHES = !!cur.swatches;
     NOASCII = !!cur.noAscii;
@@ -680,6 +694,14 @@ $("save-screen").addEventListener("click", async () => {
 
   function loadChunk(chunkIndex, addr) {
     if (cache.has(chunkIndex) || loading.has(chunkIndex)) return;
+
+    // VRAM / CRAM : découpe l'instantané `*v` déjà en mémoire (pas d'accès carte).
+    if (snapView()) {
+      const snap = cur === VIEWS.vram ? vramSnap : cramSnap;
+      if (snap) cache.set(chunkIndex, snap.subarray(addr, Math.min(addr + CHUNK, snap.length)));
+      return;
+    }
+
     loading.add(chunkIndex);
     safeInvoke("memrd", { addr, len: CHUNK })
       .then((dump) => {
@@ -704,7 +726,8 @@ $("save-screen").addEventListener("click", async () => {
     const first = Math.max(0, Math.floor(top / LINE_H) - 2);
     const last  = Math.min(TOTAL_LINES - 1, Math.ceil((top + vh) / LINE_H) + 2);
 
-    if (doFetch) {
+    // VRAM/CRAM : découpe gratuite de l'instantané → toujours. RAM : selon doFetch.
+    if (doFetch || snapView()) {
       const needed = new Set();
       for (let L = first; L <= last; L++) {
         if (!isGroupHeader(L)) needed.add(chunkFor(L));
@@ -965,40 +988,53 @@ $("save-screen").addEventListener("click", async () => {
   const subtabBtns = document.querySelectorAll(".mem-subtab");
   const viewIdOf = (v) => Object.keys(VIEWS).find((k) => VIEWS[k] === v);
 
-  // Vide le cache des chunks chargés et relit les données fraîches de l'émulateur
-  // (nécessaire après un chargement de ROM, un reset ou une reconnexion).
+  // Prend un instantané VRAM + CRAM via `*v` (menu OS). Renvoie true si OK.
+  let vramCapturing = false;
+  async function captureVramCram() {
+    if (vramCapturing) return false;
+    vramCapturing = true;
+    log("Capture VRAM/CRAM (menu de la carte)…");
+    const res = await safeInvoke("capture_vram");
+    vramCapturing = false;
+    if (!res) {
+      log("VRAM/CRAM : lecture impossible. Affichez le menu de la carte (pas pendant un jeu).", "err");
+      return false;
+    }
+    vramSnap = b64ToBytes(res.vram_b64);
+    cramSnap = b64ToBytes(res.cram_b64);
+    log("VRAM/CRAM capturées ✔", "ok");
+    return true;
+  }
+
+  // Vide le cache et recharge la vue courante : RAM → relit la zone visible ;
+  // VRAM/CRAM → reprend un instantané `*v`. Sur matériel, appelé seulement sur
+  // action explicite (« Rafraîchir », changement de vue).
   invalidateMemCache = () => {
     cache.clear();
     loading.clear();
     highlight = null;
-    renderVisible(true); // action explicite : on charge la zone visible
-    if (cur.showVectors) loadVectors();
+    if (snapView()) {
+      captureVramCram().then((ok) => { if (ok) { cache.clear(); renderVisible(true); } });
+    } else {
+      renderVisible(true);
+      if (cur.showVectors) loadVectors();
+    }
   };
 
   // (Ré)applique la politique de lecture après une (dé)connexion. Sur matériel
-  // réel : mode conservateur + VRAM/CRAM masquées ; sur l'émulateur : tout ouvert.
+  // réel : RAM en mode conservateur ; VRAM/CRAM restent accessibles (via `*v`,
+  // menu affiché). Sur l'émulateur : tout ouvert.
   configureMemForDevice = (isEmu) => {
     readMode = isEmu ? "emu" : "hw";
     autoLoad = isEmu;
     if (memWarnEl) memWarnEl.hidden = isEmu;
 
-    subtabBtns.forEach((b) => {
-      const v = b.dataset.memview;
-      if (v === "vram" || v === "cram") b.style.display = isEmu ? "" : "none";
-    });
-
     cache.clear();
     loading.clear();
     highlight = null;
+    vramSnap = cramSnap = null; // instantané périmé après un (dé)branchement
 
-    // Si on quitte une carte réelle alors qu'une vue émulateur était affichée.
-    if (!isEmu && cur !== VIEWS.ram) {
-      subtabBtns.forEach((b) => b.classList.toggle("active", b.dataset.memview === "ram"));
-      view.scrollTop = 0;
-      setupGeometry("ram");
-    } else {
-      setupGeometry(viewIdOf(cur)); // recalcule CHUNK selon le nouveau mode
-    }
+    setupGeometry(viewIdOf(cur)); // recalcule CHUNK selon le nouveau mode
     renderVisible(false);
     if (isEmu && cur.showVectors) loadVectors();
   };
@@ -1014,7 +1050,13 @@ $("save-screen").addEventListener("click", async () => {
       highlight = null;
       view.scrollTop = 0;
       setupGeometry(btn.dataset.memview);
-      renderVisible(true); // changement de vue = action explicite
+      const haveSnap = cur === VIEWS.vram ? vramSnap : (cur === VIEWS.cram ? cramSnap : true);
+      if (snapView() && !haveSnap) {
+        // Première ouverture de VRAM/CRAM : prend l'instantané `*v`.
+        captureVramCram().then((ok) => { if (ok) { cache.clear(); renderVisible(true); } });
+      } else {
+        renderVisible(true); // RAM, ou instantané déjà en mémoire
+      }
       if (cur.showVectors) loadVectors();
     });
   });
@@ -1062,8 +1104,24 @@ $("save-screen").addEventListener("click", async () => {
   $("mem-save").addEventListener("click", async () => {
     const defaultName = cur === VIEWS.ram ? "memdump.bin" : (cur === VIEWS.vram ? "vram.bin" : "cram.bin");
 
-    // Dump complet = lecture de toute la fenêtre. Sur matériel réel, ça vole
-    // beaucoup de cycles au CPU PC-Engine : on lit par blocs (la console
+    // VRAM/CRAM : enregistre l'instantané `*v` (le capture si besoin), sans
+    // toucher au bus cartouche.
+    if (snapView()) {
+      let snap = cur === VIEWS.vram ? vramSnap : cramSnap;
+      if (!snap) {
+        if (!(await captureVramCram())) return;
+        snap = cur === VIEWS.vram ? vramSnap : cramSnap;
+      }
+      const p = await safeInvoke("pick_save", { default_name: defaultName });
+      if (!p) return;
+      const okv = await safeInvoke("save_png", { data_base64: bytesToB64(snap), path: p });
+      if (okv === null) return;
+      log(cur.label + " enregistrée : " + p + " (" + snap.length + " octets)", "ok");
+      return;
+    }
+
+    // Dump complet de la RAM = lecture de toute la fenêtre. Sur matériel réel,
+    // ça vole beaucoup de cycles au CPU PC-Engine : on lit par blocs (la console
     // respire entre chaque) et on prévient l'utilisateur.
     if (readMode !== "emu") {
       const secs = Math.ceil(SIZE / 90000); // ~90 Ko/s utiles

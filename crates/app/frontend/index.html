@@ -160,10 +160,12 @@
             <button class="mem-subtab" data-memview="cram">🎨 CRAM (VCE)</button>
           </div>
           <p class="mem-warning" id="mem-warning" hidden>
-            ⚠️ Matériel réel : chaque lecture parcourt le bus cartouche et
-            <strong>gèle brièvement le CPU PC-Engine</strong>. Rien n'est lu
-            automatiquement — utilisez « 🔄 Rafraîchir » pour charger la zone
-            affichée. VRAM / CRAM ne sont pas accessibles (internes à la console).
+            ⚠️ Matériel réel : la vue <strong>Mémoire</strong> parcourt le bus
+            cartouche et <strong>gèle brièvement le CPU PC-Engine</strong> à
+            chaque lecture — rien n'est lu automatiquement, utilisez
+            « 🔄 Rafraîchir ». <strong>VRAM / CRAM</strong> : instantané via la
+            commande <span class="mono">*v</span> du menu OS — affichez le menu
+            de la carte (impossible pendant un jeu).
           </p>
           <p class="hint" id="mem-hint"></p>
           <div class="hex-toolbar">

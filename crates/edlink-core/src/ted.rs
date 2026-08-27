@@ -521,11 +521,25 @@ impl Ted {
     /// Capture l'écran avec des réglages de visualisation (taille de BAT,
     /// résolution, défilement). Voir [`crate::image::ScreenOpts`].
     pub fn screen_opts(&mut self, opts: &crate::image::ScreenOpts) -> Result<Vec<u8>> {
+        let (vram, palette) = self.vram_dump()?;
+        crate::image::make_png(&vram, &palette, opts)
+    }
+
+    /// Instantané de la mémoire vidéo via la commande FIFO `*v` du menu OS :
+    /// renvoie `(vram, cram)` — VRAM du VDC (0x10000 octets) et CRAM/palette du
+    /// VCE (0x400 octets = 512 mots de 16 bits).
+    ///
+    /// Le menu (code assembleur de la carte) recopie VRAM + CRAM dans un tampon
+    /// de la RAM cartouche puis renvoie son adresse ; l'hôte lit ce tampon. Ne
+    /// fonctionne que si **le menu de la carte est affiché** (le VDC/VCE sont
+    /// internes à la console, hors du bus cartouche — pas de lecture directe
+    /// pendant un jeu). Port de `DEV_TED/MenuCmd.VramDump`.
+    pub fn vram_dump(&mut self) -> Result<(Vec<u8>, Vec<u8>)> {
         self.fifo_wr(b"*v")?;
         let dump_addr = self.link.rx32()?;
         let vram = self.mem_rd(dump_addr, 0x10000)?;
-        let palette = self.mem_rd(dump_addr + 0x10000, 1024)?;
-        crate::image::make_png(&vram, &palette, opts)
+        let cram = self.mem_rd(dump_addr + 0x10000, 1024)?;
+        Ok((vram, cram))
     }
 }
 

@@ -103,13 +103,17 @@ conservateur** :
 | lecture au défilement | auto | manuelle (« Rafraîchir ») |
 | relecture auto (connexion / load / reset) | oui | non |
 | recherche | balayage complet | zones déjà chargées seulement |
-| dump complet | 1 lecture | blocs de 16 Ko + confirmation |
-| onglets VRAM / CRAM | visibles | masqués |
+| dump complet RAM | 1 lecture | blocs de 16 Ko + confirmation |
 
-La bascule vient de `DeviceInfo.is_emulator` (renvoyé par `connect`), déduit de
-l'en-tête `CMD_SYS_INF` (`Ted::is_emulator`). Côté frontend, `connect` appelle
-`configureMemForDevice(isEmulator)`. `memrd` est une commande **async**
-(`spawn_blocking`) pour ne pas geler l'interface pendant le transfert.
+Les onglets **VRAM / CRAM** sont disponibles dans les deux cas : ils ne passent
+pas par `CMD_MEM_RD` mais par un **instantané `*v`** (`Ted::vram_dump`, commande
+`capture_vram`) — la même routine que la capture d'écran, où le menu OS recopie
+VRAM+CRAM dans la RAM cartouche. Nécessite le menu de la carte affiché.
+
+La bascule RAM vient de `DeviceInfo.is_emulator` (renvoyé par `connect`), déduit
+de l'en-tête `CMD_SYS_INF` (`Ted::is_emulator`). Côté frontend, `connect` appelle
+`configureMemForDevice(isEmulator)`. `memrd` et `capture_vram` sont des commandes
+**async** (`spawn_blocking`) pour ne pas geler l'interface pendant le transfert.
 
 ## Ajouter une commande
 

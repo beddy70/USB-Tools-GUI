@@ -112,11 +112,21 @@ octet émis/reçu par `edlink-core`. Pour capturer le vrai protocole d'une carte
 EDLINK_TRACE=1 edlink-cli --port /dev/cu.usbmodemXXXX ls sd:/GAMES
 ```
 
-### Capture d'écran (menu)
+### Instantané VRAM / CRAM (`*v`) — capture d'écran & visualiseur mémoire
 
-1. `FifoWR("*v")` → la carte répond par l'adresse de dump `rx32()` ;
-2. `MemRD(addr, 0x10000)` = VRAM, `MemRD(addr+0x10000, 1024)` = palette ;
-3. conversion VRAM/palette → image 320×224 → PNG (port de `DEV_TED/MenuImage.cs`).
+1. `FifoWR("*v")` → le **menu OS** (code assembleur de la carte) recopie
+   VRAM + CRAM dans un tampon de la RAM cartouche et répond par son adresse
+   (`rx32()`) ;
+2. `MemRD(addr, 0x10000)` = **VRAM** (VDC), `MemRD(addr+0x10000, 1024)` =
+   **CRAM** (VCE, 512 mots de 16 bits) ;
+3. la capture d'écran convertit VRAM/CRAM → image 320×224 → PNG (port de
+   `DEV_TED/MenuImage.cs`) ; le visualiseur mémoire affiche les octets bruts.
+
+`Ted::vram_dump()` renvoie `(vram, cram)` ; `Ted::screen_opts()` l'utilise.
+**Ne fonctionne que si le menu de la carte est affiché** : le VDC/VCE sont
+internes à la console (hors bus cartouche), seul du code PCE peut les lire —
+donc pas d'accès pendant un jeu. Contrairement à la RAM (`CMD_MEM_RD`), ce
+n'est pas un souci de gel : au menu, la console est au repos.
 
 ### Lancement d'un jeu
 
@@ -148,20 +158,20 @@ Port de `DeviceIO_V1.MemRD`. `addr` adresse le **bus cartouche (FCI)** :
 > et jamais en attendant qu'un jeu continue de tourner normalement. Il n'existe
 > pas de « pause/peek/resume » : `CMD_HOST_RST` ne fait que OFF/ON (reset franc).
 >
-> Conséquence côté outil : le visualiseur mémoire lit par **petits blocs**
-> (1 Ko), **jamais automatiquement** (clic « Rafraîchir »), et n'expose pas de
-> recherche linéaire ni de dump complet en un coup sur matériel. Les vues
-> **VRAM / CRAM** n'existent que pour l'émulateur : la mémoire du VDC/VCE est
-> interne à la console, elle n'est pas sur le bus FCI.
+> Conséquence côté outil : la vue **Mémoire** (RAM, bus FCI) lit par **petits
+> blocs** (1 Ko), **jamais automatiquement** (clic « Rafraîchir »), et n'expose
+> ni recherche linéaire ni dump complet en un coup sur matériel. Les vues
+> **VRAM / CRAM** utilisent l'instantané `*v` (menu affiché) — pas le bus FCI.
 
 ### Détection émulateur vs matériel
 
 Les 20 premiers octets de la réponse `CMD_SYS_INF` sont un en-tête ASCII (chaîne
 de build du firmware sur matériel). L'émulateur virtuel y place
 `"TED-EMULATOR ..."` ; `Ted::is_emulator()` teste la présence de `"EMULATOR"`.
-L'interface s'en sert pour débrider le visualiseur mémoire (lectures libres,
-VRAM/CRAM) uniquement en émulation. `edlink-emulator --fake-hardware` force un
-en-tête « matériel » pour tester le mode conservateur.
+L'interface s'en sert pour mettre la vue **Mémoire** en mode conservateur sur
+matériel (lectures libres en émulation). VRAM/CRAM restent disponibles partout
+via `*v`. `edlink-emulator --fake-hardware` force un en-tête « matériel » pour
+tester le mode conservateur.
 
 ## Adresses mémoire clés (Turbo EverDrive Pro)
 

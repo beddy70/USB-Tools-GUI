@@ -97,6 +97,7 @@ pub fn run() {
             load_rom,
             reset_console,
             capture_screen,
+            capture_vram,
             memrd,
             save_png,
             pick_file,
@@ -323,6 +324,33 @@ fn capture_screen(state: State<'_, AppState>, params: Option<ScreenParams>) -> R
     };
     let png = with_ted(&state, |t| t.screen_opts(&opts))?;
     Ok(base64::Engine::encode(&base64::engine::general_purpose::STANDARD, png))
+}
+
+#[derive(Serialize)]
+struct VramSnapshot {
+    vram_b64: String,
+    cram_b64: String,
+}
+
+/// Instantané VRAM (VDC) + CRAM (VCE) via la commande FIFO `*v` du menu OS.
+///
+/// Fonctionne sur l'émulateur **et sur matériel réel** — mais uniquement quand
+/// le menu de la carte est affiché (le VDC/VCE sont internes à la console). Sur
+/// un jeu en cours, `*v` reste sans réponse → erreur de timeout.
+///
+/// Commande async : lit ~66 Ko sur le bus, on ne bloque pas l'interface.
+#[tauri::command]
+async fn capture_vram(app: tauri::AppHandle) -> Result<VramSnapshot, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<AppState>();
+        let (vram, cram) = with_ted(&state, |t| t.vram_dump())?;
+        let b64 = |v: Vec<u8>| {
+            base64::Engine::encode(&base64::engine::general_purpose::STANDARD, v)
+        };
+        Ok(VramSnapshot { vram_b64: b64(vram), cram_b64: b64(cram) })
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 /// Lecture mémoire (lecture seule) : renvoie les octets en base64.
