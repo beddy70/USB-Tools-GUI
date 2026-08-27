@@ -416,58 +416,162 @@ $("save-screen").addEventListener("click", async () => {
 });
 
 // ---------------------------------------------------------------- mémoire (hex viewer)
-// Visualiseur scrollable de la RAM (8 Mo), avec colonne ASCII, repères de banque
-// toutes les 8 Ko (0x2000) et chargement paresseux des banques au défilement.
+// Visualiseur scrollable à trois vues : RAM HuCard (8 Mo, banques de 8 Ko),
+// VRAM (VDC, 64 Ko) et CRAM (VCE, 512 mots) — ces deux dernières étant des
+// mémoires 16 bits, affichées en mots. Chargement paresseux au défilement.
 (() => {
-  const MEM_START = 0x000000;
-  const MEM_END   = 0x800000;             // 8 Mo (SIZE_RAM0)
-  const BANK      = 0x2000;               // 8 Ko par banque
-  const BPR       = 16;                   // octets par ligne
-  const ROWS_BANK = BANK / BPR;           // 512 lignes de données par banque
-  const PER_BANK_LINES = ROWS_BANK + 1;   // + 1 ligne d'en-tête "bank"
-  const BANK_CNT  = (MEM_END - MEM_START) / BANK; // 1024 banques
-  const TOTAL_LINES = BANK_CNT * PER_BANK_LINES;
   const LINE_H = 18;
 
-  const view   = $("hex-view");
-  const spacer = $("hex-spacer");
-  const posEl  = $("mem-pos");
-  const goInput = $("mem-go");
+  // Liste des vues de l'onglet Mémoire. Les adresses de fenêtre VRAM/CRAM
+  // correspondent aux fenêtres exposées par l'émulateur (device.rs).
+  const VIEWS = {
+    ram: {
+      label: "Mémoire (vue actuelle)",
+      start: 0x000000,
+      size:  0x800000,          // 8 Mo (SIZE_RAM0)
+      word16: false,
+      unitsPerRow: 16,          // 16 octets par ligne
+      groupBytes: 0x2000,       // banque de 8 Ko (en-tête "bank")
+      showBanks: true,
+      showVectors: true,
+    },
+    vram: {
+      label: "VRAM (VDC)",
+      start: 0x02000000,        // fenêtre VRAM côté émulateur
+      size:  0x10000,           // 64 Ko = 32 768 mots de 16 bits
+      word16: true,
+      unitsPerRow: 8,           // 8 mots par ligne (= 16 octets)
+      showVectors: false,
+    },
+    cram: {
+      label: "CRAM (VCE)",
+      start: 0x02010000,        // fenêtre CRAM côté émulateur
+      size:  0x400,             // 512 mots de 16 bits = 1 024 octets
+      word16: true,
+      unitsPerRow: 8,           // 8 mots par ligne ; 1 palette = 2 lignes (16 mots)
+      groupBytes: 0x20,         // 32 octets = une palette (16 mots) → en-tête "palette"
+      swatches: true,           // colonne de droite = carrés de couleur (au lieu de l'ASCII)
+      showVectors: false,
+    },
+  };
+
+  // ----- éléments DOM -----
+  const view     = $("hex-view");
+  const spacer   = $("hex-spacer");
+  const posEl    = $("mem-pos");
+  const goInput  = $("mem-go");
+  const vecPanel = $("vec-panel");
+  const bankCtrl = $("mem-bank-ctrl");
+  const hintEl   = $("mem-hint");
+  const hOff = $("h-off"), hHex = $("h-hex"), hAsc = $("h-asc");
   if (!view) return;
 
-  spacer.style.height = (TOTAL_LINES * LINE_H) + "px";
+  // ----- géométrie courante (recalculée à chaque changement de vue) -----
+  let cur = VIEWS.ram;
+  let START, SIZE, WORD16, UNIT_BYTES, UNITS_PER_ROW, BYTES_PER_ROW;
+  let GROUPED, GROUP_BYTES, ROWS_GROUP, PER_GROUP_LINES, GROUP_CNT, CHUNK, CHUNK_CNT, TOTAL_LINES, SWATCHES;
 
-  const cache   = new Map();   // bankIndex -> Uint8Array(8192)
-  const loading = new Set();   // bankIndex en cours de chargement
-  let highlight = null;        // { addr, bytes } : dernier motif trouvé (surbrillance)
+  const hexAddr = (n) => "$" + n.toString(16).toUpperCase().padStart(6, "0");
+  const hexWord = (w) => w.toString(16).toUpperCase().padStart(4, "0");
 
-  const lineInfo = (L) => {
-    const bankIndex = Math.floor(L / PER_BANK_LINES);
-    return { bankIndex, within: L % PER_BANK_LINES };
-  };
-  const bankStart = (b) => MEM_START + b * BANK;
-  const addressAt = (L) => {
-    const { bankIndex, within } = lineInfo(L);
-    return bankStart(bankIndex) + (within === 0 ? 0 : (within - 1) * BPR);
-  };
-  const hex6 = (n) => "$" + n.toString(16).toUpperCase().padStart(6, "0");
+  function makeHexHeader() {
+    const cols = [];
+    for (let i = 0; i < UNITS_PER_ROW; i++) {
+      cols.push((i * UNIT_BYTES).toString(16).toUpperCase().padStart(2, "0"));
+    }
+    return cols.join(" ");
+  }
 
-  function loadBank(bankIndex) {
-    if (cache.has(bankIndex) || loading.has(bankIndex)) return;
-    loading.add(bankIndex);
-    safeInvoke("memrd", { addr: bankStart(bankIndex), len: BANK })
+  function makeHint() {
+    if (cur === VIEWS.ram) {
+      return 'RAM HuCard : <span class="mono">$000000</span> → <span class="mono">$7FFFFF</span> (8 Mo). ' +
+        'Les données se chargent au fil du défilement ; un repère <span class="mono">bank</span> apparaît toutes les 8 Ko (0x2000 octets).';
+    }
+    if (cur === VIEWS.vram) {
+      return 'VRAM (VDC) : mémoire vidéo de 64 Ko, mots de 16 bits (32 768 mots). ' +
+        'Fenêtre hôte <span class="mono">$02000000</span> → <span class="mono">$0200FFFF</span>.';
+    }
+    if (cur === VIEWS.cram) {
+      return 'CRAM (VCE) : palette couleur, 32 palettes de 16 couleurs (512 mots de 16 bits). ' +
+        'Les <b>Palette 0–15</b> servent aux tuiles, les <b>Palette sprite 0–15</b> aux sprites. ' +
+        'Chaque mot code une couleur : <span class="mono">bits 8-6 = G</span>, ' +
+        '<span class="mono">5-3 = R</span>, <span class="mono">2-0 = B</span>. ' +
+        'Fenêtre hôte <span class="mono">$02010000</span> → <span class="mono">$020103FF</span>.';
+    }
+  }
+
+  // ----- géométrie -----
+  function lineStartAddr(L) {
+    if (GROUPED) {
+      const g = Math.floor(L / PER_GROUP_LINES);
+      const within = L % PER_GROUP_LINES;
+      return START + g * GROUP_BYTES + (within === 0 ? 0 : (within - 1) * BYTES_PER_ROW);
+    }
+    return START + L * BYTES_PER_ROW;
+  }
+  const isGroupHeader = (L) => GROUPED && (L % PER_GROUP_LINES === 0);
+  const groupIndexAt  = (L) => Math.floor(L / PER_GROUP_LINES);
+  const chunkFor = (L) => Math.floor((lineStartAddr(L) - START) / CHUNK);
+  const chunkAddr = (c) => START + c * CHUNK;
+
+  // Libellé d'un en-tête de groupe : "bank N" pour la RAM, "Palette N" /
+  // "Palette sprite N" pour la CRAM (16 palettes tuiles puis 16 palettes sprites).
+  function groupLabel(g) {
+    if (cur === VIEWS.cram) {
+      return g < 16 ? "Palette " + g : "Palette sprite " + (g - 16);
+    }
+    return "bank " + g;
+  }
+
+  function setupGeometry(viewId) {
+    cur = VIEWS[viewId];
+    START = cur.start; SIZE = cur.size;
+    WORD16 = cur.word16;
+    UNIT_BYTES = WORD16 ? 2 : 1;
+    UNITS_PER_ROW = cur.unitsPerRow;
+    BYTES_PER_ROW = UNITS_PER_ROW * UNIT_BYTES;
+    GROUPED = (cur.groupBytes || 0) > 0;
+    GROUP_BYTES = cur.groupBytes || 0;
+    if (GROUPED) {
+      ROWS_GROUP = GROUP_BYTES / BYTES_PER_ROW;
+      PER_GROUP_LINES = ROWS_GROUP + 1;   // +1 ligne d'en-tête (bank / palette)
+      GROUP_CNT = SIZE / GROUP_BYTES;
+      TOTAL_LINES = GROUP_CNT * PER_GROUP_LINES;
+    } else {
+      TOTAL_LINES = SIZE / BYTES_PER_ROW;
+    }
+    CHUNK = Math.min(0x2000, SIZE);
+    CHUNK_CNT = Math.ceil(SIZE / CHUNK);
+    SWATCHES = !!cur.swatches;
+    spacer.style.height = TOTAL_LINES * LINE_H + "px";
+
+    if (vecPanel) vecPanel.style.display = cur.showVectors ? "" : "none";
+    if (bankCtrl) bankCtrl.style.display = cur.showBanks ? "" : "none";
+    if (hOff) hOff.textContent = "Offset";
+    if (hHex) hHex.textContent = makeHexHeader();
+    if (hAsc) hAsc.textContent = SWATCHES ? "Couleurs" : (WORD16 ? "ASCII (bas/haut)" : "ASCII");
+    if (hintEl) hintEl.innerHTML = makeHint();
+  }
+  // ----- cache / chargement paresseux -----
+  const cache   = new Map();   // chunkIndex -> Uint8Array(CHUNK)
+  const loading = new Set();
+  let highlight = null;        // { addr, bytes } : dernier motif trouvé
+
+  function loadChunk(chunkIndex, addr) {
+    if (cache.has(chunkIndex) || loading.has(chunkIndex)) return;
+    loading.add(chunkIndex);
+    safeInvoke("memrd", { addr, len: CHUNK })
       .then((dump) => {
-        loading.delete(bankIndex);
+        loading.delete(chunkIndex);
         if (dump) {
-          // Le back-end renvoie `MemDump { addr, len, data_base64 }` (snake_case).
           const bin = atob(dump.data_base64);
           const arr = new Uint8Array(bin.length);
           for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
-          cache.set(bankIndex, arr);
+          cache.set(chunkIndex, arr);
         }
         renderVisible();
       })
-      .catch(() => loading.delete(bankIndex));
+      .catch(() => loading.delete(chunkIndex));
   }
 
   function renderVisible() {
@@ -478,50 +582,76 @@ $("save-screen").addEventListener("click", async () => {
 
     const needed = new Set();
     for (let L = first; L <= last; L++) {
-      const { within, bankIndex } = lineInfo(L);
-      if (within !== 0) needed.add(bankIndex);
+      if (!isGroupHeader(L)) needed.add(chunkFor(L));
     }
-    for (const b of needed) loadBank(b);
+    for (const c of needed) loadChunk(c, chunkAddr(c));
 
     const frag = document.createDocumentFragment();
     for (let L = first; L <= last; L++) {
-      const { bankIndex, within } = lineInfo(L);
       const div = document.createElement("div");
-      div.className = "hex-line" + (within === 0 ? " bank" : "") + ((L % 2 === 1) ? " alt" : "");
+      div.className = "hex-line" + (isGroupHeader(L) ? " bank" : "") + ((L % 2 === 1) ? " alt" : "");
       div.style.top = (L * LINE_H) + "px";
-      if (within === 0) {
-        const s = bankStart(bankIndex);
+      if (isGroupHeader(L)) {
+        const s = lineStartAddr(L);
         const off = document.createElement("span"); off.className = "off";
-        const bl  = document.createElement("span"); bl.className = "bl";
-        bl.textContent = `bank ${bankIndex} · ${hex6(s)} – ${hex6(s + BANK - 1)}`;
+        off.textContent = hexAddr(s);
+        const bl = document.createElement("span"); bl.className = "bl";
+        bl.textContent = groupLabel(groupIndexAt(L)) + " · " + hexAddr(s) + " – " + hexAddr(s + GROUP_BYTES - 1);
         div.append(off, bl);
       } else {
-        const base = (within - 1) * BPR;
-        const data = cache.get(bankIndex);
+        const data = cache.get(chunkFor(L));
         const off = document.createElement("span"); off.className = "off";
-        off.textContent = hex6(addressAt(L));
+        off.textContent = hexAddr(lineStartAddr(L));
         const hb = document.createElement("span"); hb.className = "hb";
         const ab = document.createElement("span"); ab.className = "ab";
         if (data) {
-          const lineStart = addressAt(L);
+          const rowStart = lineStartAddr(L);
+          const base = (rowStart - START) % CHUNK; // offset dans le chunk chargé
           const hlEnd = highlight ? highlight.addr + highlight.bytes.length : -1;
-          for (let j = 0; j < BPR; j++) {
-            const b = data[base + j];
-            const addr = lineStart + j;
+          for (let j = 0; j < UNITS_PER_ROW; j++) {
+            const addr = rowStart + j * UNIT_BYTES;
             const inHl = highlight && addr >= highlight.addr && addr < hlEnd;
-            const bs = document.createElement("span");
-            if (inHl) bs.className = "byte-hl";
-            bs.textContent = b.toString(16).toUpperCase().padStart(2, "0");
-            hb.appendChild(bs);
-            hb.appendChild(document.createTextNode(" "));
-            const as = document.createElement("span");
-            if (inHl) as.className = "byte-hl";
-            as.textContent = (b >= 32 && b <= 126) ? String.fromCharCode(b) : ".";
-            ab.appendChild(as);
+            if (!WORD16) {
+              const u = document.createElement("span");
+              if (inHl) u.className = "byte-hl";
+              u.textContent = data[base + j].toString(16).toUpperCase().padStart(2, "0");
+              hb.appendChild(u); hb.appendChild(document.createTextNode(" "));
+              const b = data[base + j];
+              const as = document.createElement("span");
+              if (inHl) as.className = "byte-hl";
+              as.textContent = (b >= 32 && b <= 126) ? String.fromCharCode(b) : ".";
+              ab.appendChild(as);
+            } else {
+              const lo = data[base + j * 2], hi = data[base + j * 2 + 1] || 0;
+              const w = (lo | (hi << 8)) & 0xFFFF;
+              const u = document.createElement("span");
+              if (inHl) u.className = "byte-hl";
+              u.textContent = hexWord(w);
+              hb.appendChild(u); hb.appendChild(document.createTextNode(" "));
+              if (SWATCHES) {
+                // CRAM : un carré de couleur par mot (CRAM 16 bits → RGB 3×3 bits).
+                const B = (w >> 0) & 0x7, R = (w >> 3) & 0x7, G = (w >> 6) & 0x7;
+                const s3 = (v) => Math.round((v * 255) / 7);
+                const sw = document.createElement("span");
+                sw.className = "cram-swatch";
+                if (inHl) sw.classList.add("byte-hl");
+                sw.style.background = "rgb(" + s3(R) + "," + s3(G) + "," + s3(B) + ")";
+                sw.title = "$" + hexWord(w) + "  G=" + G + " R=" + R + " B=" + B;
+                ab.appendChild(sw);
+              } else {
+                for (let k = 0; k < 2; k++) {
+                  const b = data[base + j * 2 + k];
+                  const as = document.createElement("span");
+                  if (inHl) as.className = "byte-hl";
+                  as.textContent = (b >= 32 && b <= 126) ? String.fromCharCode(b) : ".";
+                  ab.appendChild(as);
+                }
+              }
+            }
           }
         } else {
-          hb.textContent = "?? ".repeat(BPR);
-          ab.textContent = ".".repeat(BPR);
+          hb.textContent = (WORD16 ? "???? " : "?? ").repeat(UNITS_PER_ROW);
+          ab.textContent = SWATCHES ? "" : ".".repeat(UNITS_PER_ROW * UNIT_BYTES);
         }
         div.append(off, hb, ab);
       }
@@ -532,10 +662,9 @@ $("save-screen").addEventListener("click", async () => {
     view.appendChild(frag);
 
     posEl.textContent =
-      "bank " + Math.floor(addressAt(first) / BANK) + " · " + hex6(addressAt(first));
+      (GROUPED ? groupLabel(groupIndexAt(first)) + " · " : "") + hexAddr(lineStartAddr(first));
   }
-
-  // ---- Vecteurs d'interruption (panneau gauche) ----
+  // ---- Vecteurs d'interruption (panneau gauche, vue RAM) ----
   // Lecture des 5 vecteurs depuis la RAM chargée. VEC_BASE est l'offset dump de
   // IRQ2. Selon la taille de la HuCard : $1FF6 = 8 Ko, $2FF6 = 12 Ko, $3FF6 =
   // 16 Ko, … (les 10 derniers octets de la HuCard). Valeur petit-boutiste.
@@ -556,7 +685,7 @@ $("save-screen").addEventListener("click", async () => {
     vecValEls.length = 0;
     for (const v of VECTORS) {
       const li = document.createElement("li");
-      li.title = v.desc; // description conservée en info-bulle
+      li.title = v.desc;
       const a = document.createElement("span"); a.className = "vec-addr"; a.textContent = v.cpu;
       const n = document.createElement("b");   n.className = "vec-name"; n.textContent = v.name;
       const val = document.createElement("span"); val.className = "vec-val empty"; val.textContent = "…";
@@ -568,8 +697,8 @@ $("save-screen").addEventListener("click", async () => {
 
   // Lit les octets des vecteurs et affiche leur valeur (adresse pointée, petit-boutiste).
   function loadVectors() {
-    if (!vecListEl || !vecValEls.length) return;
-    safeInvoke("memrd", { addr: MEM_START + VEC_BASE, len: 10 })
+    if (!vecListEl || !vecValEls.length || !cur.showVectors) return;
+    safeInvoke("memrd", { addr: VEC_BASE, len: 10 })
       .then((dump) => {
         if (!dump) return;
         const arr = Uint8Array.from(atob(dump.data_base64), (c) => c.charCodeAt(0));
@@ -586,34 +715,45 @@ $("save-screen").addEventListener("click", async () => {
       })
       .catch(() => {});
   }
-
-  // ---- Navigation simplifiée : bank / adresse / recherche hex·ascii ----
+  // ---- Navigation : adresse / bank / recherche hex·ascii ----
   const scrollToAddr = (addr) => {
-    const a = Math.max(MEM_START, Math.min(addr, MEM_END - 1));
-    const bankIndex = Math.floor((a - MEM_START) / BANK);
-    const within    = Math.floor(((a - MEM_START) % BANK) / BPR);
-    const L = bankIndex * PER_BANK_LINES + 1 + within;
+    const a = Math.max(START, Math.min(addr, START + SIZE - 1));
+    let L;
+    if (GROUPED) {
+      const g = Math.floor((a - START) / GROUP_BYTES);
+      const within    = Math.floor(((a - START) % GROUP_BYTES) / BYTES_PER_ROW);
+      L = g * PER_GROUP_LINES + 1 + within;
+    } else {
+      L = Math.floor((a - START) / BYTES_PER_ROW);
+    }
     view.scrollTop = Math.max(0, L * LINE_H - view.clientHeight / 2);
     renderVisible();
   };
 
+  $("mem-go-btn").addEventListener("click", () => {
+    const raw = goInput.value.trim().replace(/^0x/i, "").replace(/^\$/, "");
+    let addr = parseInt(raw, 16);
+    if (isNaN(addr)) { log("Adresse invalide", "err"); return; }
+    scrollToAddr(addr);
+  });
+  goInput.addEventListener("keydown", (e) => { if (e.key === "Enter") $("mem-go-btn").click(); });
+
   const bankInput = $("mem-bank");
   const bankBtn   = $("mem-bank-btn");
+  bankBtn.addEventListener("click", () => {
+    let b = parseInt(bankInput.value, 10);
+    if (isNaN(b)) return;
+    b = Math.max(0, Math.min(b, GROUP_CNT - 1));
+    bankInput.value = b;
+    scrollToAddr(START + b * GROUP_BYTES);
+  });
+  bankInput.addEventListener("keydown", (e) => { if (e.key === "Enter") bankBtn.click(); });
+
   const searchInput = $("mem-search");
   const searchBtn   = $("mem-search-btn");
   const searchStop  = $("mem-search-stop");
   let searchAbort = false;
 
-  bankBtn.addEventListener("click", () => {
-    let b = parseInt(bankInput.value, 10);
-    if (isNaN(b)) return;
-    b = Math.max(0, Math.min(b, BANK_CNT - 1));
-    bankInput.value = b;
-    scrollToAddr(MEM_START + b * BANK);
-  });
-  bankInput.addEventListener("keydown", (e) => { if (e.key === "Enter") bankBtn.click(); });
-
-  // "DE AD BE" / "DEADBEEF" / "$DEAD" / "0xDEAD" → motif hex ; sinon ASCII.
   function parseSearchPattern(raw) {
     const s = raw.trim();
     if (!s) return null;
@@ -645,23 +785,24 @@ $("save-screen").addEventListener("click", async () => {
     if (highlight) { highlight = null; renderVisible(); }
     const label = pat.map((b) => b.toString(16).toUpperCase().padStart(2, "0")).join(" ");
     log("Recherche de " + label + "…", "info");
-    const startBank = Math.floor((view.scrollTop / LINE_H) / PER_BANK_LINES);
+    const topL = Math.floor(view.scrollTop / LINE_H);
+    const startChunk = Math.floor((lineStartAddr(topL) - START) / CHUNK);
     try {
-      for (let k = 0; k < BANK_CNT && !searchAbort; k++) {
-        const b = (startBank + k) % BANK_CNT;
-        let data = cache.get(b);
+      for (let k = 0; k < CHUNK_CNT && !searchAbort; k++) {
+        const c = (startChunk + k) % CHUNK_CNT;
+        let data = cache.get(c);
         if (!data) {
           let dump = null;
-          try { dump = await safeInvoke("memrd", { addr: bankStart(b), len: BANK }); } catch {}
+          try { dump = await safeInvoke("memrd", { addr: chunkAddr(c), len: CHUNK }); } catch {}
           if (!dump) continue;
-          data = Uint8Array.from(atob(dump.data_base64), (c) => c.charCodeAt(0));
-          cache.set(b, data);
+          data = Uint8Array.from(atob(dump.data_base64), (ch) => ch.charCodeAt(0));
+          cache.set(c, data);
         }
         const at = findPattern(data, pat);
         if (at >= 0) {
-          const addr = bankStart(b) + at;
+          const addr = chunkAddr(c) + at;
           highlight = { addr, bytes: pat };
-          log("Motif trouvé à " + hex6(addr) + " (bank " + b + ")", "ok");
+          log("Motif trouvé à " + hexAddr(addr) + (GROUPED ? " (" + groupLabel(c) + ")" : ""), "ok");
           scrollToAddr(addr);
           return;
         }
@@ -675,15 +816,33 @@ $("save-screen").addEventListener("click", async () => {
   searchInput.addEventListener("keydown", (e) => { if (e.key === "Enter") runSearch(); });
   searchStop.addEventListener("click", () => { searchAbort = true; });
 
-  // Vide le cache des banques chargées et relit les données fraîches de la
-  // RAM (nécessaire après un chargement de ROM, un reset ou une reconnexion).
+  // Vide le cache des chunks chargés et relit les données fraîches de l'émulateur
+  // (nécessaire après un chargement de ROM, un reset ou une reconnexion).
   invalidateMemCache = () => {
     cache.clear();
     loading.clear();
     highlight = null;
     renderVisible();
-    loadVectors();
+    if (cur.showVectors) loadVectors();
   };
+
+  // Bascule entre les trois vues (RAM / VRAM / CRAM).
+  const subtabBtns = document.querySelectorAll(".mem-subtab");
+  const viewIdOf = (v) => Object.keys(VIEWS).find((k) => VIEWS[k] === v);
+  subtabBtns.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      if (btn.dataset.memview === viewIdOf(cur)) return;
+      subtabBtns.forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      cache.clear();
+      loading.clear();
+      highlight = null;
+      view.scrollTop = 0;
+      setupGeometry(btn.dataset.memview);
+      renderVisible();
+      if (cur.showVectors) loadVectors();
+    });
+  });
 
   let rafPending = false;
   view.addEventListener("scroll", () => {
@@ -692,45 +851,37 @@ $("save-screen").addEventListener("click", async () => {
     requestAnimationFrame(() => { rafPending = false; renderVisible(); });
   });
 
-  $("mem-go-btn").addEventListener("click", () => {
-    const raw = goInput.value.trim().replace(/^0x/i, "").replace(/^\$/, "");
-    let addr = parseInt(raw, 16);
-    if (isNaN(addr)) { log("Adresse invalide", "err"); return; }
-    addr = Math.max(MEM_START, Math.min(addr, MEM_END - 1));
-    const bankIndex = Math.floor((addr - MEM_START) / BANK);
-    const within    = Math.floor(((addr - MEM_START) % BANK) / BPR);
-    const L = bankIndex * PER_BANK_LINES + 1 + within;
-    view.scrollTop = Math.max(0, L * LINE_H - view.clientHeight / 2);
-    renderVisible();
-  });
-  goInput.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") $("mem-go-btn").click();
-  });
-
-  // Suit le redimensionnement (séparateur, fenêtre, activation d'onglet)
   if (window.ResizeObserver) {
     new ResizeObserver(renderVisible).observe(view);
   } else {
     window.addEventListener("resize", renderVisible);
   }
 
+  setupGeometry("ram");
   renderVisible();
   buildVecList();
   loadVectors();
 
+  // Rafraîchit la vue courante : vide le cache (et les relectures en cours),
+  // relit les données fraîches de l'émulateur, et recharge les vecteurs si besoin.
+  $("mem-refresh").addEventListener("click", () => {
+    log("Relecture de " + cur.label + "…");
+    invalidateMemCache();
+  });
+
   $("mem-save").addEventListener("click", async () => {
-    const path = await safeInvoke("pick_save", { default_name: "memdump.bin" });
+    const defaultName = cur === VIEWS.ram ? "memdump.bin" : (cur === VIEWS.vram ? "vram.bin" : "cram.bin");
+    const path = await safeInvoke("pick_save", { default_name: defaultName });
     if (!path) return;
-    log("Lecture de toute la mémoire (8 Mo)…");
-    const dump = await safeInvoke("memrd", { addr: MEM_START, len: MEM_END - MEM_START });
+    log("Lecture de " + cur.label + " (" + SIZE + " octets)…");
+    const dump = await safeInvoke("memrd", { addr: START, len: SIZE });
     if (!dump) return;
     const bytes = Uint8Array.from(atob(dump.data_base64), (c) => c.charCodeAt(0));
     const ok = await safeInvoke("save_png", { data_base64: dump.data_base64, path });
     if (ok === null) return;
-    log(`Mémoire enregistrée : ${path} (${bytes.length} octets)`, "ok");
+    log(cur.label + " enregistrée : " + path + " (" + bytes.length + " octets)", "ok");
   });
 })();
-
 // ---------------------------------------------------------------- séparateur
 // Sépare la partie haute de l'interface du journal : le glisser redimensionne
 // la hauteur du journal (donc celle de la partie haute). Valeur mémorisée.

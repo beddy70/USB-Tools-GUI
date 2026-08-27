@@ -296,6 +296,69 @@ impl McpClient {
         let b64 = r["data"].as_str().ok_or_else(|| McpError("get_screenshot sans data".to_string()))?;
         base64_decode(b64).ok_or_else(|| McpError("get_screenshot : base64 invalide".to_string()))
     }
+
+    // ------------------------------------------------- zones mémoire génériques
+
+    /// Résout une zone mémoire par fragment de nom (insensible à la casse,
+    /// correspondance "contient"). Renvoie `(id, size, unit_size)`.
+    ///
+    /// Les identifiants (`id`) et l'échelle (`unit_size`) des zones de
+    /// GearGraFX peuvent varier selon la configuration : on les interroge donc
+    /// toujours via `list_memory_areas` plutôt que de les supposer fixes.
+    pub fn area_id(&mut self, needle: &str) -> Result<(i64, u64, u64)> {
+        let needle = needle.to_lowercase();
+        let r = self.call_tool("list_memory_areas", json!({}))?;
+        for area in r["areas"].as_array().cloned().unwrap_or_default() {
+            let name = area["name"].as_str().unwrap_or("").to_lowercase();
+            if name.contains(&needle) {
+                let id = area["id"]
+                    .as_i64()
+                    .ok_or_else(|| McpError(format!("zone {needle} sans id")))?;
+                let unit = area["unit_size"].as_u64().unwrap_or(1).max(1);
+                let size = area["size"].as_u64().unwrap_or(0);
+                return Ok((id, size, unit));
+            }
+        }
+        Err(McpError(format!("zone mémoire {needle} introuvable (list_memory_areas)")))
+    }
+
+    /// Lit `size_units` unités adressables d'une zone (offset en unités),
+    /// en décodant la réponse hexadécimale en octets bruts.
+    fn read_zone_bytes(&mut self, area: i64, offset_units: u64, size_units: usize) -> Result<Vec<u8>> {
+        let r = self.call_tool(
+            "read_memory",
+            json!({
+                "area": area,
+                "offset": format!("{:X}", offset_units),
+                "size": size_units,
+            }),
+        )?;
+        let data = r["data"].as_str().ok_or_else(|| McpError("read_memory sans data".to_string()))?;
+        hex_bytes(data)
+    }
+
+    /// Lit la **VRAM** complète du VDC (64 Ko) auprès de l'émulateur hôte.
+    /// Renvoyée en octets bruts. La zone VRAM (unit_size = 2) a une taille de
+    /// `size` unités adressables ; `read_memory` compte en **octets**, on lit
+    /// donc `size * unit_size` octets (32768 unités × 2 = 65536 octets).
+    pub fn read_vram(&mut self) -> Result<Vec<u8>> {
+        let (id, size, unit) = self.area_id("VRAM")?;
+        self.read_zone_bytes(id, 0, (size * unit) as usize)
+    }
+
+    /// Lit la **palette / color table RAM** du HuC6260 (VCE) auprès de
+    /// l'émulateur hôte. La zone palette (unit_size = 2) fait 512 unités
+    /// adressables = 1024 octets ; `read_memory` compte en **octets**, on lit
+    /// donc `size * unit_size` octets (512 × 2 = 1024) pour obtenir la totalité
+    /// des 512 couleurs (BBB RRR GGG sur 9 bits par mot 16 bits).
+    pub fn read_palette(&mut self) -> Result<Vec<u8>> {
+        for needle in ["Palette", "Color RAM", "CRAM", "VCE", "pal"] {
+            if let Ok((id, size, unit)) = self.area_id(needle) {
+                return self.read_zone_bytes(id, 0, (size * unit) as usize);
+            }
+        }
+        Err(McpError("zone palette introuvable (list_memory_areas)".to_string()))
+    }
 }
 
 
@@ -466,7 +529,11 @@ mod tests {
                         let tool = req["params"]["name"].as_str().unwrap_or("");
                         let inner = match tool {
                             "list_memory_areas" => {
-                                json!({"areas": [{"id": 3, "name": "ROM", "size": 0x10000, "unit_size": 1}]})
+                                json!({"areas": [
+                                    {"id": 1, "name": "VRAM", "size": 0x10000, "unit_size": 1},
+                                    {"id": 2, "name": "Palette", "size": 512, "unit_size": 2},
+                                    {"id": 3, "name": "ROM", "size": 0x10000, "unit_size": 1}
+                                ]})
                             }
                             "read_memory" => {
                                 let off_str = req["params"]["arguments"]["offset"].as_str().unwrap_or("0");
@@ -516,6 +583,26 @@ mod tests {
         // Lecture au-delà de la taille de la ROM (0x10000) : 0xFF.
         let beyond = c.read_rom(0x10000, 4).unwrap();
         assert_eq!(beyond, vec![0xFF; 4]);
+    }
+
+    #[test]
+    fn test_mcp_read_vram_palette() {
+        let addr = spawn_fake_gear_server();
+        let mut c = McpClient::connect("127.0.0.1", addr.port(), None).unwrap();
+
+        // VRAM : 32768 unités (unit_size 2) -> 65536 octets.
+        let vram = c.read_vram().unwrap();
+        assert_eq!(vram.len(), 0x10000);
+
+        // Palette : 512 unités (unit_size 2) -> 1024 octets bruts.
+        let pal = c.read_palette().unwrap();
+        assert_eq!(pal.len(), 1024);
+
+        // Resolution par nom : doit trouver la zone VRAM (insensible casse).
+        let (id, size, unit) = c.area_id("vram").unwrap();
+        assert_eq!(id, 1);
+        assert_eq!(size, 0x10000);
+        assert_eq!(unit, 1);
     }
 
     #[test]

@@ -28,6 +28,10 @@ const ADDR_FCI_CFG: u32 = 0x0180_0000;
 const ADDR_FCI_FIFO: u32 = 0x0181_0000;
 const SIZE_RAM0: usize = 0x0080_0000; // 8 Mo
 const DUMP_ADDR: u32 = 0x0060_0000; // zone tampon du dump d'écran
+// Fenêtres dédiées du visualiseur mémoire (adresses libres, hors RAM0/RAM1/CFG/FIFO).
+// VRAM = mémoire vidéo du VDC (64 Ko), CRAM = palette du VCE (512 mots = 1024 octets).
+const ADDR_VRAM: u32 = 0x0200_0000;
+const ADDR_CRAM: u32 = 0x0201_0000;
 
 // Commandes (cf. crates/edlink-core/src/protocol.rs)
 const CMD_STATUS: u8 = 0x10;
@@ -69,6 +73,10 @@ pub struct Device {
     vram: Vec<u8>,
     palette: Vec<u8>,
     dump_addr: u32,
+    /// Vrai si les buffers de capture (`vram`/`palette`) ne reflètent pas encore
+    /// l'état réel de l'hôte GearGraFX. Déclenche un `refresh_screen()` paresseux
+    /// à la première lecture des fenêtres VRAM/CRAM (visualiseur mémoire).
+    screen_dirty: bool,
     /// Client MCP vers l'émulateur PC-Engine hôte (GearGraFX) : quand il est
     /// présent, les lectures/écritures de la RAM0 (HuCard) sont servies depuis
     /// la zone ROM de l'hôte au lieu de la RAM virtuelle locale.
@@ -96,6 +104,7 @@ impl Device {
             vram: vec![0u8; 0x10000],
             palette: vec![0u8; 1024],
             dump_addr: DUMP_ADDR,
+            screen_dirty: true,
             mcp,
         };
         dev.gen_menu_image();
@@ -125,6 +134,7 @@ impl Device {
         self.open_file = None;
         self.open_len = 0;
         self.fifo_buf.clear();
+        self.screen_dirty = true;
     }
 
     /// Lit et traite les commandes d'un hôte jusqu'à sa déconnexion (EOF).
@@ -238,6 +248,28 @@ impl Device {
         if addr == self.dump_addr.wrapping_add(0x10000) && len == self.palette.len() {
             return self.palette.clone();
         }
+        // Fenêtres dédiées du visualiseur mémoire : VRAM (VDC) et CRAM (VCE).
+        // Lectures partielles autorisées (le visualiseur lit par morceaux).
+        if (addr as u64) >= ADDR_VRAM as u64
+            && (addr as u64 + len as u64) <= ADDR_VRAM as u64 + 0x10000
+        {
+            if self.screen_dirty && self.mcp.is_some() {
+                self.refresh_screen();
+            }
+            let base = (addr - ADDR_VRAM) as usize;
+            out.copy_from_slice(&self.vram[base..base + len]);
+            return out;
+        }
+        if (addr as u64) >= ADDR_CRAM as u64
+            && (addr as u64 + len as u64) <= ADDR_CRAM as u64 + 1024
+        {
+            if self.screen_dirty && self.mcp.is_some() {
+                self.refresh_screen();
+            }
+            let base = (addr - ADDR_CRAM) as usize;
+            out.copy_from_slice(&self.palette[base..base + len]);
+            return out;
+        }
         let end = addr as u64 + len as u64;
         // RAM0 (HuCard chargée / jeu)
         if (addr as u64) >= ADDR_FCI_RAM1 as u64 && end <= ADDR_FCI_RAM1 as u64 + SIZE_RAM0 as u64 {
@@ -312,7 +344,7 @@ impl Device {
                     break;
                 }
                 println!("[cmd] FIFO *v (dump écran)");
-                self.gen_menu_image();
+                self.refresh_screen();
                 master.write_all(&self.dump_addr.to_le_bytes())?;
                 self.fifo_buf.drain(0..2);
             } else if self.fifo_buf.starts_with(b"*i") {
@@ -371,6 +403,9 @@ impl Device {
                         eprintln!("[emulator] MCP load_media({abs:?}) : {e}");
                     }
                 }
+                // Nouveau média : la prochaine lecture des fenêtres VRAM/CRAM
+                // doit reprendre la capture auprès de l'hôte (nouvelle palette).
+                self.screen_dirty = true;
                 0
             }
             Err(_) => 1, // fichier introuvable
@@ -534,6 +569,41 @@ impl Device {
         out
     }
 
+    /// Alimente les buffers de capture (`vram` VDC + `palette` VCE) avant un
+    /// dump `*v`.
+    ///
+    /// En mode MCP, on lit la **VRAM** et la **palette/CRAM** réelles auprès de
+    /// l'émulateur hôte (GearGraFX) via `read_memory`, ce qui correspond à ce
+    /// que le code assembleur de la vraie TED Pro ferait sur une console
+    /// physique. Sans hôte (ou en cas d'échec), on retombe sur l'écran de menu
+    /// artificiel généré localement.
+    fn refresh_screen(&mut self) {
+        // Lire d'abord dans des buffers locaux pour libérer l'emprunt mut sur
+        // `self.mcp` avant d'écrire dans `self.vram` / `self.palette`.
+        let fetched: Option<(Vec<u8>, Vec<u8>)> = if let Some(mcp) = &mut self.mcp {
+            match (mcp.read_vram(), mcp.read_palette()) {
+                (Ok(v), Ok(p)) => Some((v, p)),
+                _ => None,
+            }
+        } else {
+            None
+        };
+
+        match fetched {
+            Some((v, p)) if v.len() >= 0x10000 && p.len() >= 1024 => {
+                self.vram[..0x10000].copy_from_slice(&v[..0x10000]);
+                self.palette[..1024].copy_from_slice(&p[..1024]);
+            }
+            _ => {
+                if self.mcp.is_some() {
+                    eprintln!("[emulator] capture : lecture MCP VRAM/palette impossible, fallback menu");
+                }
+                self.gen_menu_image();
+            }
+        }
+        self.screen_dirty = false;
+    }
+
     /// Génère un "écran de menu" reconnaissable (VRAM + palette) pour `capture_screen`.
     fn gen_menu_image(&mut self) {
         // Palette : cube de couleurs sur 256 entrées (16 palettes x 16 couleurs)
@@ -625,3 +695,65 @@ fn put_u16(buf: &mut [u8], p: &mut usize, v: u16) {
     buf[*p..*p + 2].copy_from_slice(&v.to_le_bytes());
     *p += 2;
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn temp_sd() -> VirtualSd {
+        let dir = std::env::temp_dir().join(format!("edlink_sd_vram_test_{}", std::process::id()));
+        VirtualSd::new(&dir).unwrap()
+    }
+
+    #[test]
+    fn mem_read_vram_cram_windows() {
+        let mut dev = Device::new(temp_sd(), DEV_ID_TURBO_PRO, None);
+        // Motifs reconnaissables pour vérifier que les octets servis viennent
+        // bien des buffers VRAM / palette.
+        for i in 0..dev.vram.len() {
+            dev.vram[i] = (i as u8).wrapping_mul(7);
+        }
+        for i in 0..dev.palette.len() {
+            dev.palette[i] = (i as u8).wrapping_mul(13);
+        }
+
+        // Lecture partielle en début de VRAM
+        let part = dev.mem_read(ADDR_VRAM, 16);
+        assert_eq!(part.len(), 16);
+        for i in 0..16 {
+            assert_eq!(part[i], dev.vram[i], "VRAM début, octet {i}");
+        }
+
+        // Lecture partielle en fin de VRAM (chevauchant la fin de la fenêtre)
+        let off = 0x10000 - 8;
+        let tail = dev.mem_read(ADDR_VRAM + off, 8);
+        assert_eq!(tail.len(), 8);
+        for i in 0..8 {
+            assert_eq!(tail[i], dev.vram[off as usize + i], "VRAM fin, octet {i}");
+        }
+
+        // Lecture complète VRAM
+        let full = dev.mem_read(ADDR_VRAM, 0x10000);
+        assert_eq!(full, dev.vram);
+
+        // CRAM : lecture partielle décalée
+        let cram = dev.mem_read(ADDR_CRAM + 4, 12);
+        assert_eq!(cram.len(), 12);
+        for i in 0..12 {
+            assert_eq!(cram[i], dev.palette[4 + i], "CRAM, octet {i}");
+        }
+
+        // Lecture complète CRAM
+        let full_cram = dev.mem_read(ADDR_CRAM, 1024);
+        assert_eq!(full_cram, dev.palette);
+
+        // Hors fenêtre : ne doit PAS venir de la VRAM/CRAM (retombe sur le motif adresse).
+        let oob = dev.mem_read(ADDR_CRAM + 0x400, 4);
+        for i in 0..4 {
+            let v = (ADDR_CRAM + 0x400) as usize + i;
+            let expected = ((v ^ (v >> 8) ^ (v >> 16)) & 0xFF) as u8;
+            assert_eq!(oob[i], expected, "hors fenêtre, octet {i}");
+        }
+    }
+}
+

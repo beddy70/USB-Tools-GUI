@@ -184,6 +184,14 @@ hr.sep { border: none; border-top: 1px solid var(--border); margin: 26px 0; }
 
 /* ---------- Visualiseur mémoire (hex) ---------- */
 .mono { font-family: var(--mono); }
+.mem-subtabs { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+.mem-subtab { display: flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--panel); color: var(--muted);
+  font-size: 13px; cursor: pointer; transition: all .15s; }
+.mem-subtab:hover { color: var(--text); border-color: rgba(34,224,255,0.4); }
+.mem-subtab.active { background: linear-gradient(90deg, rgba(34,224,255,0.14), rgba(255,45,212,0.10));
+  color: var(--text); border-color: rgba(34,224,255,0.5); font-weight: 600; }
+.mem-bank-ctrl { display: inline-flex; align-items: center; gap: 10px; }
 .hex-toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
 .hex-toolbar .hex-go { width: 120px; font-family: var(--mono); text-transform: uppercase; }
 .hex-toolbar .hex-go2 { width: 72px; font-family: var(--mono); }
@@ -207,6 +215,9 @@ hr.sep { border: none; border-top: 1px solid var(--border); margin: 26px 0; }
 .hex-line.bank { background: linear-gradient(90deg, rgba(34,224,255,0.16), rgba(34,224,255,0.02));
   border-top: 1px solid var(--border); font-weight: 600; }
 .hex-line.bank .bl { color: var(--cyan); }
+.hex-line .cram-swatch { display: inline-block; width: 13px; height: 13px; margin-right: 3px;
+  border: 1px solid rgba(255,255,255,0.18); border-radius: 3px; vertical-align: middle;
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,0.25); }
 
 /* ---------- Panneau des vecteurs d'interruption (gauche du visualiseur) ---------- */
 .mem-layout { flex: 1; min-height: 0; display: flex; gap: 12px; align-items: stretch; }

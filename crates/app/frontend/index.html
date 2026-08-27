@@ -101,34 +101,39 @@
         <!-- MEMOIRE -->
         <section id="tab-memory" class="tab-panel">
           <h2>Visualiseur mémoire (lecture seule)</h2>
-          <p class="hint">
-            RAM HuCard : <span class="mono">$000000</span> → <span class="mono">$7FFFFF</span> (8 Mo).
-            Les données se chargent au fil du défilement ; un repère <span class="mono">bank</span> apparaît toutes les 8 Ko (0x2000 octets).
-          </p>
+          <div class="mem-subtabs" id="mem-subtabs">
+            <button class="mem-subtab active" data-memview="ram">🗂 Mémoire (vue actuelle)</button>
+            <button class="mem-subtab" data-memview="vram">🖥 VRAM (VDC)</button>
+            <button class="mem-subtab" data-memview="cram">🎨 CRAM (VCE)</button>
+          </div>
+          <p class="hint" id="mem-hint"></p>
           <div class="hex-toolbar">
             <label for="mem-go">Aller à 0x</label>
             <input id="mem-go" class="hex-go" type="text" value="$000000" spellcheck="false" />
             <button class="btn ghost" id="mem-go-btn">Aller</button>
-            <label for="mem-bank">bank n°</label>
-            <input id="mem-bank" class="hex-go2" type="number" min="0" max="1023" value="0" />
-            <button class="btn ghost" id="mem-bank-btn">Aller</button>
+            <span class="mem-bank-ctrl" id="mem-bank-ctrl">
+              <label for="mem-bank">bank n°</label>
+              <input id="mem-bank" class="hex-go2" type="number" min="0" max="1023" value="0" />
+              <button class="btn ghost" id="mem-bank-btn">Aller</button>
+            </span>
             <input id="mem-search" class="hex-search" type="text" placeholder="Rechercher hex/ascii…" spellcheck="false" />
             <button class="btn ghost" id="mem-search-btn">🔎</button>
             <button class="btn ghost" id="mem-search-stop" hidden>⏹</button>
             <span class="hex-pos" id="mem-pos"></span>
+            <button class="btn ghost" id="mem-refresh" title="Relire les données de la vue courante depuis l'émulateur">🔄 Rafraîchir</button>
             <button class="btn ghost" id="mem-save">💾 Sauver…</button>
           </div>
           <div class="mem-layout">
-            <aside class="vec-panel">
+            <aside class="vec-panel" id="vec-panel">
               <h3>Vecteurs d'interruption <span class="vec-chip">PC-Engine</span></h3>
               <p class="vec-note">HuC6280 · banque 0 · à partir de <span class="mono">$1FF6</span> · valeurs lues en RAM</p>
               <ul class="vec-list" id="vec-list"></ul>
             </aside>
             <div class="hex-wrap">
               <div class="hex-head">
-                <span class="h-off">Offset</span>
-                <span class="h-hex">00 01 02 03 04 05 06 07 08 09 0A 0B 0C 0D 0E 0F</span>
-                <span class="h-asc">ASCII</span>
+                <span class="h-off" id="h-off">Offset</span>
+                <span class="h-hex" id="h-hex">00 01 02 03 04 05 06 07 08 09 0A 0B 0C 0D 0E 0F</span>
+                <span class="h-asc" id="h-asc">ASCII</span>
               </div>
               <div class="hex-view" id="hex-view">
                 <div class="hex-spacer" id="hex-spacer"></div>
