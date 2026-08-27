@@ -113,7 +113,7 @@ L'émulateur répond fidèlement à ce que `edlink-core` envoie :
 | Mémoire | `MEM_RD`, `MEM_WR` (RAM0/RAM1, registre CFG, FIFO du menu OS) |
 | Fichiers SD | `F_OPN`, `F_RD`, `F_WR`, `F_CLOSE`, `F_AVB`, `F_DIR_OPN`, `F_DIR_MK` |
 | Reset | `HOST_RST` (simple ou « reset to menu » avec annonce `'r'`) |
-| FIFO menu OS | `*v` (version), `*i` (installer un jeu), `*s` (lancer le jeu) |
+| FIFO menu OS | `*v` (instantané VRAM+CRAM — capture d'écran, vues VRAM/CRAM, planche de sprites), `*i` (installer un jeu), `*s` (lancer le jeu) |
 
 ---
 
@@ -169,4 +169,4 @@ MCP factice (fake server).
 
 ---
 
-_Licence MIT — projet « Turbo Everdrive USB Tools »._
+_Licence MIT — projet « Turbo Everdrive USB Tools GUI »._

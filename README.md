@@ -32,6 +32,7 @@ carte — le tout relié à la cartouche par **USB série** (CDC).
 - [Vérification matérielle](#vérification-matérielle)
 - [Limitations connues](#limitations-connues)
 - [Feuille de route](#feuille-de-route)
+- [Dépôt](#dépôt)
 - [Références](#références)
 
 ---
@@ -180,8 +181,10 @@ réinitialise son état par session. Commandes utiles :
 5. **Capturer l'écran** affiche le menu de la carte (format PNG).
 6. Onglet **Mémoire** : RAM HuCard (via `memrd`), VRAM/CRAM (instantané `*v`,
    menu affiché).
-7. Onglet **Sprites** : planche de tuiles décodées de la VRAM ; réglez cellule
-   (8/16), palette et zoom ; cliquez une cellule pour son adresse VRAM.
+7. Onglet **Sprites** : planche de tuiles décodées de la VRAM ; choisissez la
+   taille de cellule (8×8 fond, ou 16×16 à 32×64 pour les 6 tailles de sprite
+   du VDC), la palette et le zoom ; cliquez une cellule pour son adresse VRAM
+   et son n° de pattern.
 
 ## Vérification matérielle
 
@@ -227,6 +230,13 @@ reçu (test `probe`), vérifiez :
 - **M3** Sauvegarde/chargement de HuCard complète (via `memrd`/`memwr`), tests
   de vitesse USB (`usbspd`), diagnostics (`diag`).
 - **M4** Packager/icônes finales, intégration continue, validations multiplateforme.
+
+## Dépôt
+
+Miroité sur deux serveurs (mêmes commits) :
+
+- `http://kiwinas:8418/eddy/USB-Tools-GUI.git` (`origin`)
+- `git@github.com:beddy70/USB-Tools-GUI.git` (`github`)
 
 ## Références
 
