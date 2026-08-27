@@ -47,6 +47,7 @@ carte — le tout relié à la cartouche par **USB série** (CDC).
 | **Reset** | Réinitialise la console |
 | **Capture d'écran** | Capture le menu de la carte (VRAM + palette → PNG) |
 | **Visualiseur mémoire** (lecture seule) | RAM HuCard via `memrd` ; VRAM/CRAM via l'instantané `*v` du menu |
+| **Sprites / tuiles VRAM** | Planche de cellules 4 bpp décodées de la VRAM (8×8 fond ou 16×16 sprite), choix de palette, zoom, clic → adresse VRAM + n° de pattern |
 
 ## Architecture
 
@@ -179,6 +180,8 @@ réinitialise son état par session. Commandes utiles :
 5. **Capturer l'écran** affiche le menu de la carte (format PNG).
 6. Onglet **Mémoire** : RAM HuCard (via `memrd`), VRAM/CRAM (instantané `*v`,
    menu affiché).
+7. Onglet **Sprites** : planche de tuiles décodées de la VRAM ; réglez cellule
+   (8/16), palette et zoom ; cliquez une cellule pour son adresse VRAM.
 
 ## Vérification matérielle
 
@@ -218,8 +221,9 @@ reçu (test `probe`), vérifiez :
   retrowave, connexion, infos, transferts, run, reset, capture, memrd.
 - **M2 ✅** Listing SD via `CMD_F_DIR_*` ; transferts asynchrones (thread dédié,
   interface réactive) + barre de progression ; visualiseur mémoire (RAM en mode
-  conservateur sur matériel, VRAM/CRAM via `*v`) ; détection émulateur/matériel ;
-  version de build injectée à la compilation.
+  conservateur sur matériel, VRAM/CRAM via `*v`) ; planche de tuiles VRAM
+  (sprites) ; détection émulateur/matériel ; version de build injectée à la
+  compilation.
 - **M3** Sauvegarde/chargement de HuCard complète (via `memrd`/`memwr`), tests
   de vitesse USB (`usbspd`), diagnostics (`diag`).
 - **M4** Packager/icônes finales, intégration continue, validations multiplateforme.

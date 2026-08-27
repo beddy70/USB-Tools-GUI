@@ -29,6 +29,7 @@
           <button class="tab-btn" data-tab="transfer"><span>📤</span> Carte SD</button>
           <button class="tab-btn" data-tab="play"><span>🎮</span> Jouer</button>
           <button class="tab-btn" data-tab="memory"><span>🧠</span> Mémoire</button>
+          <button class="tab-btn" data-tab="sprites"><span>🧩</span> Sprites</button>
         </nav>
         <div class="sidebar-footer" id="app-version" title="Version de l'application">v0.1.1-alpha</div>
       </aside>
@@ -202,6 +203,49 @@
               </div>
             </div>
           </div>
+        </section>
+
+        <!-- SPRITES / TUILES VRAM -->
+        <section id="tab-sprites" class="tab-panel">
+          <h2>Planche de tuiles VRAM</h2>
+          <p class="hint">
+            Décodage de l'instantané VRAM (64 Ko) en grille de cellules 4 bpp.
+            Les <strong>motifs de sprites</strong> (comme ceux de fond) sont
+            stockés dans la VRAM : repérez-les visuellement, cliquez une cellule
+            pour lire son adresse VRAM et son n° de pattern. Partage l'instantané
+            <span class="mono">*v</span> avec la capture d'écran — menu de la
+            carte affiché.
+          </p>
+
+          <div class="spr-toolbar">
+            <label>Cellule
+              <select id="spr-cell">
+                <option value="8">8×8 (fond)</option>
+                <option value="16" selected>16×16 (sprite)</option>
+              </select>
+            </label>
+            <label>Palette
+              <select id="spr-pal"></select>
+            </label>
+            <label>Colonnes
+              <input id="spr-cols" type="number" min="1" max="64" value="16" />
+            </label>
+            <label>Zoom
+              <input id="spr-zoom" type="range" min="1" max="8" step="1" value="3" />
+              <span class="sval" id="spr-zoom-val">3×</span>
+            </label>
+            <label class="spr-check"><input type="checkbox" id="spr-grid" checked /> Grille</label>
+            <label class="spr-check"><input type="checkbox" id="spr-transp" checked /> Index 0 transparent</label>
+            <button class="btn ghost" id="spr-refresh">🔄 Capturer</button>
+            <button class="btn ghost" id="spr-save">💾 PNG…</button>
+          </div>
+
+          <div class="spr-info" id="spr-info">Aucune cellule sélectionnée.</div>
+
+          <div class="spr-canvas-wrap" id="spr-canvas-wrap">
+            <canvas id="spr-canvas"></canvas>
+          </div>
+          <div class="spr-status" id="spr-status"></div>
         </section>
       </main>
     </div>

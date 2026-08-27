@@ -105,10 +105,16 @@ conservateur** :
 | recherche | balayage complet | zones déjà chargées seulement |
 | dump complet RAM | 1 lecture | blocs de 16 Ko + confirmation |
 
-Les onglets **VRAM / CRAM** sont disponibles dans les deux cas : ils ne passent
-pas par `CMD_MEM_RD` mais par un **instantané `*v`** (`Ted::vram_dump`, commande
-`capture_vram`) — la même routine que la capture d'écran, où le menu OS recopie
-VRAM+CRAM dans la RAM cartouche. Nécessite le menu de la carte affiché.
+Les onglets **VRAM / CRAM**, l'onglet **Sprites** et la **capture d'écran** ne
+passent pas par `CMD_MEM_RD` mais par un **instantané `*v`** (`Ted::vram_dump`,
+commande `capture_vram(refresh)`) — la même routine que la capture d'écran, où
+le menu OS recopie VRAM+CRAM dans la RAM cartouche. L'instantané est mis en
+cache une fois (`AppState.screen_snap`) et partagé par ces trois vues ; seul un
+« Rafraîchir » / « Capturer » explicite relit `*v`. Nécessite le menu affiché.
+
+L'onglet **Sprites** (`frontend/main.js`, IIFE « planche de tuiles ») décode
+l'instantané VRAM en `<canvas>` — 100 % côté client, aucun aller-retour backend
+pour les réglages (palette, cellule 8/16, zoom, grille).
 
 La bascule RAM vient de `DeviceInfo.is_emulator` (renvoyé par `connect`), déduit
 de l'en-tête `CMD_SYS_INF` (`Ted::is_emulator`). Côté frontend, `connect` appelle

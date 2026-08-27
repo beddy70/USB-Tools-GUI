@@ -390,13 +390,27 @@ struct VramSnapshot {
 /// le menu de la carte est affiché (le VDC/VCE sont internes à la console). Sur
 /// un jeu en cours, `*v` reste sans réponse → erreur de timeout.
 ///
-/// Commande async : lit ~66 Ko sur le bus, on ne bloque pas l'interface.
+/// `refresh` : `true` (défaut) relit `*v` ; `false` renvoie le dernier
+/// instantané mis en cache (partagé avec la capture d'écran et la vue Sprites),
+/// et ne lit la carte que si le cache est vide. Commande async (~66 Ko lus).
 #[tauri::command]
-async fn capture_vram(app: tauri::AppHandle) -> Result<VramSnapshot, String> {
+async fn capture_vram(
+    app: tauri::AppHandle,
+    refresh: Option<bool>,
+) -> Result<VramSnapshot, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let state = app.state::<AppState>();
-        let (vram, cram) = with_ted(&state, |t| t.vram_dump())?;
-        let b64 = |v: Vec<u8>| {
+        let want_fetch =
+            refresh != Some(false) || state.screen_snap.lock().unwrap().is_none();
+        if want_fetch {
+            let fresh = with_ted(&state, |t| t.vram_dump())?;
+            *state.screen_snap.lock().unwrap() = Some(fresh);
+        }
+        let snap = state.screen_snap.lock().unwrap();
+        let (vram, cram) = snap
+            .as_ref()
+            .ok_or("aucun instantané VRAM — affichez le menu de la carte")?;
+        let b64 = |v: &[u8]| {
             base64::Engine::encode(&base64::engine::general_purpose::STANDARD, v)
         };
         Ok(VramSnapshot { vram_b64: b64(vram), cram_b64: b64(cram) })

@@ -89,8 +89,12 @@ document.querySelectorAll(".tab-btn").forEach((btn) => {
     // réel, on ne lit rien automatiquement — l'utilisateur clique « Rafraîchir »
     // (chaque lecture vole des cycles au CPU PC-Engine).
     if (btn.dataset.tab === "memory" && isEmulator && invalidateMemCache) invalidateMemCache();
+    if (btn.dataset.tab === "sprites" && openSpritesTab) openSpritesTab();
   });
 });
+
+// Renseignée par le visualiseur de tuiles VRAM ; appelée à l'ouverture de l'onglet.
+let openSpritesTab = null;
 
 // ---------------------------------------------------------------- ports
 async function refreshPorts() {
@@ -992,12 +996,14 @@ $("save-screen").addEventListener("click", async () => {
   const viewIdOf = (v) => Object.keys(VIEWS).find((k) => VIEWS[k] === v);
 
   // Prend un instantané VRAM + CRAM via `*v` (menu OS). Renvoie true si OK.
+  // `refresh` false = réutilise l'instantané partagé s'il existe (capturé par
+  // l'onglet Sprites ou la capture d'écran), sans relire la carte.
   let vramCapturing = false;
-  async function captureVramCram() {
+  async function captureVramCram(refresh = true) {
     if (vramCapturing) return false;
     vramCapturing = true;
-    log("Capture VRAM/CRAM (menu de la carte)…");
-    const res = await safeInvoke("capture_vram");
+    if (refresh) log("Capture VRAM/CRAM (menu de la carte)…");
+    const res = await safeInvoke("capture_vram", { refresh });
     vramCapturing = false;
     if (!res) {
       log("VRAM/CRAM : lecture impossible. Affichez le menu de la carte (pas pendant un jeu).", "err");
@@ -1055,8 +1061,9 @@ $("save-screen").addEventListener("click", async () => {
       setupGeometry(btn.dataset.memview);
       const haveSnap = cur === VIEWS.vram ? vramSnap : (cur === VIEWS.cram ? cramSnap : true);
       if (snapView() && !haveSnap) {
-        // Première ouverture de VRAM/CRAM : prend l'instantané `*v`.
-        captureVramCram().then((ok) => { if (ok) { cache.clear(); renderVisible(true); } });
+        // Première ouverture de VRAM/CRAM : réutilise l'instantané partagé s'il
+        // existe (capture d'écran / onglet Sprites), sinon lit `*v`.
+        captureVramCram(false).then((ok) => { if (ok) { cache.clear(); renderVisible(true); } });
       } else {
         renderVisible(true); // RAM, ou instantané déjà en mémoire
       }
@@ -1154,6 +1161,198 @@ $("save-screen").addEventListener("click", async () => {
     log(cur.label + " enregistrée : " + path + " (" + out.length + " octets)", "ok");
   });
 })();
+
+// ---------------------------------------------------------------- planche de tuiles VRAM
+// Décode l'instantané VRAM (`*v`) en grille de cellules 4 bpp pour repérer les
+// motifs de sprites (stockés en VRAM comme les tuiles de fond). Tout le décodage
+// se fait ici (canvas) : les réglages ne relisent jamais la carte.
+(() => {
+  const cv = $("spr-canvas");
+  if (!cv) return;
+  const ctx = cv.getContext("2d");
+  const b64ToBytesLocal = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
+  const elCell = $("spr-cell"), elPal = $("spr-pal"), elCols = $("spr-cols");
+  const elZoom = $("spr-zoom"), elZoomVal = $("spr-zoom-val");
+  const elGrid = $("spr-grid"), elTransp = $("spr-transp");
+  const elInfo = $("spr-info"), elStatus = $("spr-status");
+
+  let vram = null;         // Uint8Array(65536)
+  let cram = null;         // Uint8Array(1024)
+  let sheet = null;        // OffscreenCanvas-like : canvas natif (cols*cell × rows*cell)
+  let geom = null;         // { cell, cols, rows, total, cellW }
+  let sel = -1;            // index de cellule sélectionnée
+  let capturing = false;
+
+  // Palettes : 16 « fond » puis 16 « sprite » (disposition CRAM du VCE).
+  for (let p = 0; p < 32; p++) {
+    const o = document.createElement("option");
+    o.value = p;
+    o.textContent = p < 16 ? `Fond ${p}` : `Sprite ${p - 16}`;
+    elPal.appendChild(o);
+  }
+  elPal.value = "16"; // Sprite 0 par défaut
+
+  const word = (buf, w) => buf[2 * w] | (buf[2 * w + 1] << 8);
+
+  // Couleur RVBA d'une entrée (palette 0-31, index 0-15). VCE = GRB 3-3-3.
+  function palRGBA(pal, idx) {
+    const w = word(cram, (pal * 16 + idx) & 0x1ff);
+    const g = (w >> 6) & 7, r = (w >> 3) & 7, b = w & 7;
+    const s = (v) => Math.round((v * 255) / 7);
+    return [s(r), s(g), s(b)];
+  }
+
+  // Indice de couleur (0-15) d'un pixel d'une cellule.
+  //  - 8×8  : format tuile de fond (plans aux octets 0,1,16,17 d'un bloc de 32).
+  //  - 16×16: format motif de sprite (4 plans de 16 mots, bit 15 = pixel gauche).
+  function pixel8(base, x, y) {
+    const p = base + y * 2;
+    const s = 7 - x;
+    return ((vram[p] >> s) & 1)
+      | (((vram[p + 1] >> s) & 1) << 1)
+      | (((vram[p + 16] >> s) & 1) << 2)
+      | (((vram[p + 17] >> s) & 1) << 3);
+  }
+  function pixel16(baseWord, x, y) {
+    const s = 15 - x;
+    return ((word(vram, baseWord + y) >> s) & 1)
+      | (((word(vram, baseWord + 16 + y) >> s) & 1) << 1)
+      | (((word(vram, baseWord + 32 + y) >> s) & 1) << 2)
+      | (((word(vram, baseWord + 48 + y) >> s) & 1) << 3);
+  }
+
+  function buildSheet() {
+    if (!vram || !cram) { sheet = null; return; }
+    const cell = +elCell.value;
+    const cols = Math.max(1, Math.min(64, +elCols.value || 16));
+    const bytesPerCell = cell === 8 ? 32 : 128;
+    const total = Math.floor(vram.length / bytesPerCell);
+    const rows = Math.ceil(total / cols);
+    const pal = +elPal.value;
+    const transp = elTransp.checked;
+
+    const W = cols * cell, H = rows * cell;
+    sheet = document.createElement("canvas");
+    sheet.width = W; sheet.height = H;
+    const sctx = sheet.getContext("2d");
+    const img = sctx.createImageData(W, H);
+    const d = img.data;
+
+    const lut = [];
+    for (let i = 0; i < 16; i++) lut.push(palRGBA(pal, i));
+
+    for (let c = 0; c < total; c++) {
+      const cx = (c % cols) * cell, cy = Math.floor(c / cols) * cell;
+      const base = cell === 8 ? c * 32 : c * 64; // octets (8×8) ou mots (16×16)
+      for (let y = 0; y < cell; y++) {
+        for (let x = 0; x < cell; x++) {
+          const ci = cell === 8 ? pixel8(base, x, y) : pixel16(base, x, y);
+          const o = ((cy + y) * W + (cx + x)) * 4;
+          const [r, g, b] = lut[ci];
+          d[o] = r; d[o + 1] = g; d[o + 2] = b;
+          d[o + 3] = (transp && ci === 0) ? 0 : 255;
+        }
+      }
+    }
+    sctx.putImageData(img, 0, 0);
+    geom = { cell, cols, rows, total, W, H };
+  }
+
+  function paint() {
+    if (!sheet || !geom) {
+      cv.width = 10; cv.height = 10;
+      ctx.clearRect(0, 0, 10, 10);
+      return;
+    }
+    const z = +elZoom.value;
+    elZoomVal.textContent = z + "×";
+    cv.width = geom.W * z;
+    cv.height = geom.H * z;
+    ctx.imageSmoothingEnabled = false;
+    ctx.clearRect(0, 0, cv.width, cv.height);
+    ctx.drawImage(sheet, 0, 0, cv.width, cv.height);
+
+    if (elGrid.checked && z >= 2) {
+      ctx.strokeStyle = "rgba(255,255,255,0.18)";
+      ctx.lineWidth = 1;
+      const step = geom.cell * z;
+      ctx.beginPath();
+      for (let gx = 0; gx <= geom.cols; gx++) { ctx.moveTo(gx * step + 0.5, 0); ctx.lineTo(gx * step + 0.5, cv.height); }
+      for (let gy = 0; gy <= geom.rows; gy++) { ctx.moveTo(0, gy * step + 0.5); ctx.lineTo(cv.width, gy * step + 0.5); }
+      ctx.stroke();
+    }
+    if (sel >= 0 && sel < geom.total) {
+      const step = geom.cell * z;
+      const sx = (sel % geom.cols) * step, sy = Math.floor(sel / geom.cols) * step;
+      ctx.strokeStyle = "#22e0ff";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(sx + 1, sy + 1, step - 2, step - 2);
+    }
+  }
+
+  function refreshAll() { buildSheet(); paint(); updateStatus(); }
+
+  function updateStatus() {
+    if (!geom) { elStatus.textContent = ""; return; }
+    elStatus.textContent =
+      `${geom.total} cellules ${geom.cell}×${geom.cell} · ${geom.cols}×${geom.rows} · VRAM 64 Ko`;
+  }
+
+  function selectAt(clientX, clientY) {
+    if (!geom) return;
+    const r = cv.getBoundingClientRect();
+    const z = +elZoom.value;
+    const px = (clientX - r.left) / z, py = (clientY - r.top) / z;
+    const cx = Math.floor(px / geom.cell), cy = Math.floor(py / geom.cell);
+    if (cx < 0 || cx >= geom.cols || cy < 0) return;
+    const idx = cy * geom.cols + cx;
+    if (idx < 0 || idx >= geom.total) return;
+    sel = idx;
+    const wordAddr = geom.cell === 8 ? idx * 16 : idx * 64;
+    const byteAddr = wordAddr * 2;
+    const hex = (n) => "$" + n.toString(16).toUpperCase();
+    let msg = `Cellule #${idx} · VRAM ${hex(wordAddr)} (mot) / ${hex(byteAddr)} (octet)`;
+    if (geom.cell === 16) msg += ` · pattern sprite #${idx}  (SATB : addr ÷ 64)`;
+    elInfo.textContent = msg;
+    paint();
+  }
+
+  async function sprCapture(refresh) {
+    if (capturing) return;
+    capturing = true;
+    elStatus.textContent = refresh ? "Capture VRAM (menu de la carte)…" : "Chargement…";
+    const res = await safeInvoke("capture_vram", { refresh });
+    capturing = false;
+    if (!res) {
+      elStatus.textContent = "VRAM indisponible — affichez le menu de la carte (pas pendant un jeu).";
+      return;
+    }
+    vram = b64ToBytesLocal(res.vram_b64);
+    cram = b64ToBytesLocal(res.cram_b64);
+    sel = -1;
+    elInfo.textContent = "Aucune cellule sélectionnée.";
+    refreshAll();
+  }
+
+  // Ouverture de l'onglet : capture si rien en mémoire (réutilise l'instantané
+  // partagé avec la capture d'écran quand il existe).
+  openSpritesTab = () => { if (!vram) sprCapture(false); };
+
+  [elCell, elPal, elCols, elTransp].forEach((el) =>
+    el.addEventListener("input", () => { sel = -1; refreshAll(); }));
+  [elZoom, elGrid].forEach((el) => el.addEventListener("input", paint));
+  cv.addEventListener("click", (e) => selectAt(e.clientX, e.clientY));
+  $("spr-refresh").addEventListener("click", () => sprCapture(true));
+  $("spr-save").addEventListener("click", async () => {
+    if (!sheet) return;
+    const path = await safeInvoke("pick_save", { default_name: "vram-tiles.png" });
+    if (!path) return;
+    const b64 = sheet.toDataURL("image/png").split(",")[1];
+    const ok = await safeInvoke("save_png", { data_base64: b64, path });
+    if (ok !== null) log("Planche VRAM enregistrée : " + path, "ok");
+  });
+})();
+
 // ---------------------------------------------------------------- séparateur
 // Sépare la partie haute de l'interface du journal : le glisser redimensionne
 // la hauteur du journal (donc celle de la partie haute). Valeur mémorisée.

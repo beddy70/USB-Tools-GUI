@@ -134,6 +134,17 @@ internes à la console (hors bus cartouche), seul du code PCE peut les lire —
 donc pas d'accès pendant un jeu. Contrairement à la RAM (`CMD_MEM_RD`), ce
 n'est pas un souci de gel : au menu, la console est au repos.
 
+La commande `capture_vram(refresh)` renvoie l'instantané en base64 (partagé avec
+la capture d'écran via `AppState.screen_snap`). Consommateurs :
+- **onglet Mémoire** (vues VRAM/CRAM) : octets bruts ;
+- **onglet Sprites** (`frontend/main.js`) : décode la VRAM en **planche de
+  cellules 4 bpp** — 8×8 (format tuile de fond : plans aux octets 0/1/16/17 d'un
+  bloc de 32) ou 16×16 (format motif de sprite : 4 plans de 16 mots, bit 15 =
+  pixel gauche ; base = n° de pattern × 64 mots). Les motifs de sprites vivent
+  dans la VRAM (la SATB ne fait que les référencer) : on les repère à l'œil et
+  on lit l'adresse VRAM / le n° de pattern d'une cellule au clic. Décodage
+  100 % côté client (canvas) — les réglages ne relisent jamais la carte.
+
 ### Lancement d'un jeu
 
 1. `ResetToMenu` : `HostReset(ON)`, attente 10 ms, `ConfigReset` (écriture de
