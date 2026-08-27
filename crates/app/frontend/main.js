@@ -1079,12 +1079,14 @@ $("save-screen").addEventListener("click", async () => {
     const BLOCK = readMode === "emu" ? 0x40000 : 0x4000;
     const out = new Uint8Array(SIZE);
     log("Lecture de " + cur.label + " (" + fmtSize(SIZE) + ")…");
+    let lastPct = -1;
     for (let off = 0; off < SIZE; off += BLOCK) {
       const len = Math.min(BLOCK, SIZE - off);
       const dump = await safeInvoke("memrd", { addr: START + off, len });
       if (!dump) { log("Lecture interrompue à " + hexAddr(START + off), "err"); return; }
       out.set(Uint8Array.from(atob(dump.data_base64), (c) => c.charCodeAt(0)), off);
-      if (SIZE > BLOCK) log(`  ${Math.round((off + len) * 100 / SIZE)} %`, "");
+      const pct = Math.floor((off + len) * 100 / SIZE);
+      if (SIZE > BLOCK && pct !== lastPct && pct % 10 === 0) { log(`  ${pct} %`, ""); lastPct = pct; }
     }
     const ok = await safeInvoke("save_png", { data_base64: bytesToB64(out), path });
     if (ok === null) return;
