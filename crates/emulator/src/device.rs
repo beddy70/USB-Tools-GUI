@@ -73,10 +73,6 @@ pub struct Device {
     vram: Vec<u8>,
     palette: Vec<u8>,
     dump_addr: u32,
-    /// Vrai si les buffers de capture (`vram`/`palette`) ne reflètent pas encore
-    /// l'état réel de l'hôte GearGraFX. Déclenche un `refresh_screen()` paresseux
-    /// à la première lecture des fenêtres VRAM/CRAM (visualiseur mémoire).
-    screen_dirty: bool,
     /// Client MCP vers l'émulateur PC-Engine hôte (GearGraFX) : quand il est
     /// présent, les lectures/écritures de la RAM0 (HuCard) sont servies depuis
     /// la zone ROM de l'hôte au lieu de la RAM virtuelle locale.
@@ -104,7 +100,6 @@ impl Device {
             vram: vec![0u8; 0x10000],
             palette: vec![0u8; 1024],
             dump_addr: DUMP_ADDR,
-            screen_dirty: true,
             mcp,
         };
         dev.gen_menu_image();
@@ -134,7 +129,6 @@ impl Device {
         self.open_file = None;
         self.open_len = 0;
         self.fifo_buf.clear();
-        self.screen_dirty = true;
     }
 
     /// Lit et traite les commandes d'un hôte jusqu'à sa déconnexion (EOF).
@@ -253,7 +247,12 @@ impl Device {
         if (addr as u64) >= ADDR_VRAM as u64
             && (addr as u64 + len as u64) <= ADDR_VRAM as u64 + 0x10000
         {
-            if self.screen_dirty && self.mcp.is_some() {
+            // En mode MCP, on relit **systématiquement** l'état frais de la VRAM
+            // auprès de l'hôte (GearGraFX) : le jeu tourne et modifie la VRAM en
+            // continu. Sans ce rafraîchissement, un "Rafraîchir" du visualiseur
+            // mémoire renverrait l'ancienne capture en cache. Hors MCP, on sert
+            // la RAM virtuelle locale (inchangée entre deux captures).
+            if self.mcp.is_some() {
                 self.refresh_screen();
             }
             let base = (addr - ADDR_VRAM) as usize;
@@ -263,7 +262,9 @@ impl Device {
         if (addr as u64) >= ADDR_CRAM as u64
             && (addr as u64 + len as u64) <= ADDR_CRAM as u64 + 1024
         {
-            if self.screen_dirty && self.mcp.is_some() {
+            // Même logique que la VRAM : relecture fraîche de la palette (VCE)
+            // auprès de l'hôte à chaque lecture de la fenêtre CRAM.
+            if self.mcp.is_some() {
                 self.refresh_screen();
             }
             let base = (addr - ADDR_CRAM) as usize;
@@ -403,9 +404,8 @@ impl Device {
                         eprintln!("[emulator] MCP load_media({abs:?}) : {e}");
                     }
                 }
-                // Nouveau média : la prochaine lecture des fenêtres VRAM/CRAM
-                // doit reprendre la capture auprès de l'hôte (nouvelle palette).
-                self.screen_dirty = true;
+                // Nouveau média chargé : les fenêtres VRAM/CRAM seront relues
+                // auprès de l'hôte à la prochaine lecture (nouvelle palette).
                 0
             }
             Err(_) => 1, // fichier introuvable
@@ -601,7 +601,6 @@ impl Device {
                 self.gen_menu_image();
             }
         }
-        self.screen_dirty = false;
     }
 
     /// Génère un "écran de menu" reconnaissable (VRAM + palette) pour `capture_screen`.

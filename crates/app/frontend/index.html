@@ -91,6 +91,53 @@
           </div>
           <div class="card screen-card" id="screen-card" hidden>
             <h3>Capture du menu</h3>
+            <div class="screen-settings">
+              <h4>Réglages de l'image</h4>
+              <div class="screen-grid">
+                <label class="sctl" for="bat-w">
+                  <span class="sname">Taille BAT — largeur <em>(tuiles)</em></span>
+                  <span class="srow">
+                    <input type="range" id="bat-w" min="0" max="2" step="1" value="1" />
+                    <span class="sval" id="bat-w-val">64</span>
+                  </span>
+                </label>
+                <label class="sctl" for="bat-h">
+                  <span class="sname">Taille BAT — hauteur <em>(tuiles)</em></span>
+                  <span class="srow">
+                    <input type="range" id="bat-h" min="0" max="1" step="1" value="0" />
+                    <span class="sval" id="bat-h-val">32</span>
+                  </span>
+                </label>
+                <label class="sctl" for="res-w">
+                  <span class="sname">Résolution — largeur <em>(px)</em></span>
+                  <span class="srow">
+                    <input type="range" id="res-w" min="0" max="4" step="1" value="1" />
+                    <span class="sval" id="res-w-val">320</span>
+                  </span>
+                </label>
+                <label class="sctl" for="res-h">
+                  <span class="sname">Résolution — hauteur <em>(px)</em></span>
+                  <span class="srow">
+                    <input type="range" id="res-h" min="0" max="1" step="1" value="0" />
+                    <span class="sval" id="res-h-val">224</span>
+                  </span>
+                </label>
+                <label class="sctl" for="scroll-x">
+                  <span class="sname">Défilement horizontal <em>(px)</em></span>
+                  <span class="srow">
+                    <input type="range" id="scroll-x" min="0" max="511" step="1" value="0" />
+                    <span class="sval" id="scroll-x-val">0</span>
+                  </span>
+                </label>
+                <label class="sctl" for="scroll-y">
+                  <span class="sname">Défilement vertical <em>(px)</em></span>
+                  <span class="srow">
+                    <input type="range" id="scroll-y" min="0" max="511" step="1" value="0" />
+                    <span class="sval" id="scroll-y-val">0</span>
+                  </span>
+                </label>
+              </div>
+            </div>
             <img id="screen-img" alt="Capture" />
             <div class="row">
               <button class="btn ghost" id="save-screen">💾 Enregistrer le PNG…</button>

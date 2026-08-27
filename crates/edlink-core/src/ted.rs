@@ -421,12 +421,19 @@ impl Ted {
     /// Capture l'écran du menu de la carte et renvoie une image PNG.
     ///
     /// Nécessite que le menu (OS) de la cartouche soit affiché à l'écran.
+    /// Capture l'écran du menu et renvoie un PNG (réglages par défaut).
     pub fn screen(&mut self) -> Result<Vec<u8>> {
+        self.screen_opts(&crate::image::ScreenOpts::default())
+    }
+
+    /// Capture l'écran avec des réglages de visualisation (taille de BAT,
+    /// résolution, défilement). Voir [`crate::image::ScreenOpts`].
+    pub fn screen_opts(&mut self, opts: &crate::image::ScreenOpts) -> Result<Vec<u8>> {
         self.fifo_wr(b"*v")?;
         let dump_addr = self.link.rx32()?;
         let vram = self.mem_rd(dump_addr, 0x10000)?;
         let palette = self.mem_rd(dump_addr + 0x10000, 1024)?;
-        crate::image::make_png(&vram, &palette)
+        crate::image::make_png(&vram, &palette, opts)
     }
 }
 

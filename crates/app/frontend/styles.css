@@ -101,6 +101,26 @@ button.btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; box-s
 .info-card pre { font-family: var(--mono); font-size: 13px; color: var(--text);
   white-space: pre-wrap; line-height: 1.6; }
 
+/* ---------- Capture d'écran / réglages de l'image ---------- */
+.screen-card { max-width: 660px; }
+.screen-card h3 { font-size: 14px; color: var(--cyan); letter-spacing: .5px; margin-bottom: 12px; }
+.screen-settings { border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px;
+  margin-bottom: 14px; background: rgba(27,24,54,0.35); }
+.screen-settings h4 { font-size: 12px; text-transform: uppercase; letter-spacing: .5px;
+  color: var(--muted); margin-bottom: 10px; }
+.screen-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px 24px; }
+.sctl { display: flex; flex-direction: column; gap: 6px; }
+.sctl .sname { font-size: 12.5px; color: var(--muted); }
+.sctl .sname em { font-style: normal; color: var(--border); }
+.sctl .srow { display: flex; align-items: center; gap: 10px; }
+.sctl input[type="range"] { flex: 1; min-width: 0; padding: 0; background: transparent;
+  border: none; accent-color: var(--cyan); cursor: pointer; }
+.sctl .sval { min-width: 46px; text-align: right; font-family: var(--mono); font-size: 12.5px;
+  font-weight: 700; color: var(--green); background: var(--panel-2); border: 1px solid var(--border);
+  border-radius: 6px; padding: 3px 8px; }
+#screen-img { max-width: 100%; height: auto; image-rendering: pixelated;
+  border: 1px solid var(--border); border-radius: 8px; }
+
 /* ---------- Drop zone ---------- */
 .dropzone { border: 2px dashed var(--border); border-radius: 12px; padding: 34px; text-align: center;
   margin-bottom: 18px; transition: all .15s; background: rgba(27,24,54,0.4); }
@@ -215,9 +235,23 @@ hr.sep { border: none; border-top: 1px solid var(--border); margin: 26px 0; }
 .hex-line.bank { background: linear-gradient(90deg, rgba(34,224,255,0.16), rgba(34,224,255,0.02));
   border-top: 1px solid var(--border); font-weight: 600; }
 .hex-line.bank .bl { color: var(--cyan); }
+/* Ruptures de palettes sprites (CRAM) : couleur distincte (magenta) pour se
+   démarquer des palettes de tuiles (cyan). */
+.hex-line.bank.sprite { background: linear-gradient(90deg, rgba(255,45,212,0.20), rgba(255,45,212,0.03));
+  border-top: 1px solid var(--border); }
+.hex-line.bank.sprite .bl { color: var(--magenta); }
 .hex-line .cram-swatch { display: inline-block; width: 13px; height: 13px; margin-right: 3px;
   border: 1px solid rgba(255,255,255,0.18); border-radius: 3px; vertical-align: middle;
   box-shadow: inset 0 0 0 1px rgba(0,0,0,0.25); }
+
+/* Vue "valeurs seules" (VRAM) : pas de colonne ASCII, 32 mots par ligne,
+   défilement horizontal, en-tête aligné et synchronisé avec le corps. */
+.hex-wrap.noascii .hex-head { overflow: hidden; }
+.hex-wrap.noascii .h-asc { display: none; }
+.hex-wrap.noascii .h-hex,
+.hex-wrap.noascii .hex-line .hb { width: auto; white-space: nowrap; }
+.hex-wrap.noascii .hex-view { overflow-x: auto; }
+.hex-wrap.noascii .hex-line { right: auto; min-width: 100%; }
 
 /* ---------- Panneau des vecteurs d'interruption (gauche du visualiseur) ---------- */
 .mem-layout { flex: 1; min-height: 0; display: flex; gap: 12px; align-items: stretch; }

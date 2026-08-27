@@ -13,6 +13,11 @@ const els = {
   explorerUp: $("explorer-up"), explorerRefresh: $("explorer-refresh"), explorerImport: $("explorer-import"),
   viewIcons: $("view-icons"), viewList: $("view-list"),
   romPath: $("rom-path"), screenCard: $("screen-card"), screenImg: $("screen-img"),
+  batW: $("bat-w"), batH: $("bat-h"), resW: $("res-w"), resH: $("res-h"),
+  scrollX: $("scroll-x"), scrollY: $("scroll-y"),
+  batWVal: $("bat-w-val"), batHVal: $("bat-h-val"),
+  resWVal: $("res-w-val"), resHVal: $("res-h-val"),
+  scrollXVal: $("scroll-x-val"), scrollYVal: $("scroll-y-val"),
   log: $("log"),
 };
 
@@ -22,6 +27,11 @@ let explorerBusy = false;
 let explorerView = "grid"; // "grid" = icônes, "list" = liste
 const EXPLORER_MTYPE = "text/x-ted-sd";
 let lastScreenB64 = null;  // dernière capture (base64)
+// Choix discrètes proposés par les curseurs de capture (index du curseur -> valeur).
+const BAT_W_CHOICES = [32, 64, 128];   // largeur du BAT en tuiles
+const BAT_H_CHOICES = [32, 64];        // hauteur du BAT en tuiles
+const RES_W_CHOICES = [256, 320, 336, 352, 512]; // largeur d'affichage en px
+const RES_H_CHOICES = [224, 240];      // hauteur d'affichage en px
 
 // Fonction exposée par le visualiseur mémoire : vide le cache des banques et
 // re-rend les données visibles, afin de relire l'état frais de l'émulateur.
@@ -396,15 +406,42 @@ $("reset-btn").addEventListener("click", async () => {
 });
 
 // ---------------------------------------------------------------- écran
-$("screen-btn").addEventListener("click", async () => {
-  log("Capture de l'écran…");
-  const b64 = await safeInvoke("capture_screen");
+const screenChoiceVals = (el, choices) => choices[+el.value] ?? choices[0];
+const screenParams = () => ({
+  bat_w: screenChoiceVals(els.batW, BAT_W_CHOICES),
+  bat_h: screenChoiceVals(els.batH, BAT_H_CHOICES),
+  res_w: screenChoiceVals(els.resW, RES_W_CHOICES),
+  res_h: screenChoiceVals(els.resH, RES_H_CHOICES),
+  scroll_x: +els.scrollX.value,
+  scroll_y: +els.scrollY.value,
+});
+const updateScreenLabels = (p) => {
+  els.batWVal.textContent = p.bat_w;
+  els.batHVal.textContent = p.bat_h;
+  els.resWVal.textContent = p.res_w;
+  els.resHVal.textContent = p.res_h;
+  els.scrollXVal.textContent = p.scroll_x;
+  els.scrollYVal.textContent = p.scroll_y;
+};
+async function refreshScreen() {
+  const params = screenParams();
+  updateScreenLabels(params);
+  const b64 = await safeInvoke("capture_screen", { params });
   if (!b64) return;
   lastScreenB64 = b64;
   els.screenImg.src = "data:image/png;base64," + b64;
   els.screenCard.hidden = false;
-  log("Capture effectuée", "ok");
+}
+$("screen-btn").addEventListener("click", async () => {
+  log("Capture de l'écran…");
+  await refreshScreen();
+  if (lastScreenB64) log("Capture effectuée", "ok");
 });
+// Toute modification d'un réglage recapture la vue en direct.
+[els.batW, els.batH, els.resW, els.resH, els.scrollX, els.scrollY]
+  .forEach((el) => el.addEventListener("input", refreshScreen));
+// Affiche les valeurs des curseurs dès le chargement (sans capture).
+updateScreenLabels(screenParams());
 
 $("save-screen").addEventListener("click", async () => {
   if (!lastScreenB64) return;
@@ -440,7 +477,8 @@ $("save-screen").addEventListener("click", async () => {
       start: 0x02000000,        // fenêtre VRAM côté émulateur
       size:  0x10000,           // 64 Ko = 32 768 mots de 16 bits
       word16: true,
-      unitsPerRow: 8,           // 8 mots par ligne (= 16 octets)
+      unitsPerRow: 16,          // 16 mots par ligne (= 32 octets)
+      noAscii: true,            // pas de colonne ASCII (inutile pour des mots vidéo)
       showVectors: false,
     },
     cram: {
@@ -465,19 +503,31 @@ $("save-screen").addEventListener("click", async () => {
   const hintEl   = $("mem-hint");
   const hOff = $("h-off"), hHex = $("h-hex"), hAsc = $("h-asc");
   if (!view) return;
+  const hexWrap = view.closest(".hex-wrap");
+  const hexHead = hHex ? hHex.parentElement : null;
 
   // ----- géométrie courante (recalculée à chaque changement de vue) -----
   let cur = VIEWS.ram;
   let START, SIZE, WORD16, UNIT_BYTES, UNITS_PER_ROW, BYTES_PER_ROW;
-  let GROUPED, GROUP_BYTES, ROWS_GROUP, PER_GROUP_LINES, GROUP_CNT, CHUNK, CHUNK_CNT, TOTAL_LINES, SWATCHES;
+  let GROUPED, GROUP_BYTES, ROWS_GROUP, PER_GROUP_LINES, GROUP_CNT, CHUNK, CHUNK_CNT, TOTAL_LINES, SWATCHES, NOASCII;
 
   const hexAddr = (n) => "$" + n.toString(16).toUpperCase().padStart(6, "0");
   const hexWord = (w) => w.toString(16).toUpperCase().padStart(4, "0");
+  // Offset relatif à la fenêtre courante : 16 bits (4 chiffres hex) pour les
+  // vues VRAM/CRAM, adresse absolue (6 chiffres) pour la RAM.
+  const hexOffset = (n) => {
+    const off = n - START;
+    const w = (cur === VIEWS.vram || cur === VIEWS.cram) ? 4 : 6;
+    return "$" + off.toString(16).toUpperCase().padStart(w, "0");
+  };
 
   function makeHexHeader() {
+    // 4 chiffres hex pour les vues 16 bits (VRAM/CRAM) : offsets 0000 0002 0004 …
+    // 2 chiffres pour la RAM (octets) : offsets 00 01 02 …
+    const w = WORD16 ? 4 : 2;
     const cols = [];
     for (let i = 0; i < UNITS_PER_ROW; i++) {
-      cols.push((i * UNIT_BYTES).toString(16).toUpperCase().padStart(2, "0"));
+      cols.push((i * UNIT_BYTES).toString(16).toUpperCase().padStart(w, "0"));
     }
     return cols.join(" ");
   }
@@ -515,10 +565,10 @@ $("save-screen").addEventListener("click", async () => {
   const chunkAddr = (c) => START + c * CHUNK;
 
   // Libellé d'un en-tête de groupe : "bank N" pour la RAM, "Palette N" /
-  // "Palette sprite N" pour la CRAM (16 palettes tuiles puis 16 palettes sprites).
+  // "Sprite N" pour la CRAM (16 palettes de tuiles puis 16 palettes sprites).
   function groupLabel(g) {
     if (cur === VIEWS.cram) {
-      return g < 16 ? "Palette " + g : "Palette sprite " + (g - 16);
+      return g < 16 ? "Palette " + g : "Sprite " + (g - 16);
     }
     return "bank " + g;
   }
@@ -543,10 +593,13 @@ $("save-screen").addEventListener("click", async () => {
     CHUNK = Math.min(0x2000, SIZE);
     CHUNK_CNT = Math.ceil(SIZE / CHUNK);
     SWATCHES = !!cur.swatches;
+    NOASCII = !!cur.noAscii;
     spacer.style.height = TOTAL_LINES * LINE_H + "px";
 
     if (vecPanel) vecPanel.style.display = cur.showVectors ? "" : "none";
     if (bankCtrl) bankCtrl.style.display = cur.showBanks ? "" : "none";
+    if (hexWrap) hexWrap.classList.toggle("noascii", NOASCII);
+    if (hexHead) hexHead.scrollLeft = 0;
     if (hOff) hOff.textContent = "Offset";
     if (hHex) hHex.textContent = makeHexHeader();
     if (hAsc) hAsc.textContent = SWATCHES ? "Couleurs" : (WORD16 ? "ASCII (bas/haut)" : "ASCII");
@@ -596,7 +649,18 @@ $("save-screen").addEventListener("click", async () => {
         const off = document.createElement("span"); off.className = "off";
         off.textContent = hexAddr(s);
         const bl = document.createElement("span"); bl.className = "bl";
-        bl.textContent = groupLabel(groupIndexAt(L)) + " · " + hexAddr(s) + " – " + hexAddr(s + GROUP_BYTES - 1);
+        const gi = groupIndexAt(L);
+        let label = groupLabel(gi);
+        let extra = "";
+        if (cur === VIEWS.cram) {
+          // CRAM : libellé seul (sans plage d'adresses), + repère visuel dédié
+          // aux palettes sprites (g >= 16) pour les distinguer des tuiles.
+          if (gi >= 16) extra = " sprite";
+        } else {
+          label += " · " + hexAddr(s) + " – " + hexAddr(s + GROUP_BYTES - 1);
+        }
+        bl.textContent = label;
+        div.className += extra; // " sprite" (rupture de palette sprite)
         div.append(off, bl);
       } else {
         const data = cache.get(chunkFor(L));
@@ -616,11 +680,13 @@ $("save-screen").addEventListener("click", async () => {
               if (inHl) u.className = "byte-hl";
               u.textContent = data[base + j].toString(16).toUpperCase().padStart(2, "0");
               hb.appendChild(u); hb.appendChild(document.createTextNode(" "));
-              const b = data[base + j];
-              const as = document.createElement("span");
-              if (inHl) as.className = "byte-hl";
-              as.textContent = (b >= 32 && b <= 126) ? String.fromCharCode(b) : ".";
-              ab.appendChild(as);
+              if (!NOASCII) {
+                const b = data[base + j];
+                const as = document.createElement("span");
+                if (inHl) as.className = "byte-hl";
+                as.textContent = (b >= 32 && b <= 126) ? String.fromCharCode(b) : ".";
+                ab.appendChild(as);
+              }
             } else {
               const lo = data[base + j * 2], hi = data[base + j * 2 + 1] || 0;
               const w = (lo | (hi << 8)) & 0xFFFF;
@@ -636,9 +702,9 @@ $("save-screen").addEventListener("click", async () => {
                 sw.className = "cram-swatch";
                 if (inHl) sw.classList.add("byte-hl");
                 sw.style.background = "rgb(" + s3(R) + "," + s3(G) + "," + s3(B) + ")";
-                sw.title = "$" + hexWord(w) + "  G=" + G + " R=" + R + " B=" + B;
+                sw.title = "RGB(" + R + "," + G + "," + B + ")  ·  $" + hexWord(w);
                 ab.appendChild(sw);
-              } else {
+              } else if (!NOASCII) {
                 for (let k = 0; k < 2; k++) {
                   const b = data[base + j * 2 + k];
                   const as = document.createElement("span");
@@ -651,9 +717,10 @@ $("save-screen").addEventListener("click", async () => {
           }
         } else {
           hb.textContent = (WORD16 ? "???? " : "?? ").repeat(UNITS_PER_ROW);
-          ab.textContent = SWATCHES ? "" : ".".repeat(UNITS_PER_ROW * UNIT_BYTES);
+          if (!NOASCII) ab.textContent = SWATCHES ? "" : ".".repeat(UNITS_PER_ROW * UNIT_BYTES);
         }
-        div.append(off, hb, ab);
+        if (NOASCII) div.append(off, hb);
+        else div.append(off, hb, ab);
       }
       frag.appendChild(div);
     }
@@ -846,6 +913,7 @@ $("save-screen").addEventListener("click", async () => {
 
   let rafPending = false;
   view.addEventListener("scroll", () => {
+    if (hexHead) hexHead.scrollLeft = view.scrollLeft;
     if (rafPending) return;
     rafPending = true;
     requestAnimationFrame(() => { rafPending = false; renderVisible(); });

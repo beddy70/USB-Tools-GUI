@@ -216,10 +216,32 @@ fn reset_console(state: State<'_, AppState>) -> Result<(), String> {
     with_ted(&state, |t| t.reset())
 }
 
+/// Paramètres d'affichage de la capture d'écran, envoyés par le frontend.
+#[derive(serde::Deserialize, Default)]
+#[serde(default)]
+pub struct ScreenParams {
+    bat_w: Option<usize>,
+    bat_h: Option<usize>,
+    res_w: Option<usize>,
+    res_h: Option<usize>,
+    scroll_x: Option<usize>,
+    scroll_y: Option<usize>,
+}
+
 /// Capture l'écran du menu et renvoie l'image PNG encodée en base64.
+/// `params` contient les réglages de visualisation (BAT, résolution, défilement).
 #[tauri::command]
-fn capture_screen(state: State<'_, AppState>) -> Result<String, String> {
-    let png = with_ted(&state, |t| t.screen())?;
+fn capture_screen(state: State<'_, AppState>, params: Option<ScreenParams>) -> Result<String, String> {
+    let p = params.unwrap_or_default();
+    let opts = edlink_core::image::ScreenOpts {
+        bat_w: p.bat_w.unwrap_or(64),
+        bat_h: p.bat_h.unwrap_or(32),
+        res_w: p.res_w.unwrap_or(320),
+        res_h: p.res_h.unwrap_or(224),
+        scroll_x: p.scroll_x.unwrap_or(0),
+        scroll_y: p.scroll_y.unwrap_or(0),
+    };
+    let png = with_ted(&state, |t| t.screen_opts(&opts))?;
     Ok(base64::Engine::encode(&base64::engine::general_purpose::STANDARD, png))
 }
 
