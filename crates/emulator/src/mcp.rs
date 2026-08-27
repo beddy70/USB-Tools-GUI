@@ -89,7 +89,7 @@ impl McpClient {
             json!({
                 "protocolVersion": MCP_PROTOCOL_VERSION,
                 "capabilities": {},
-                "clientInfo": {"name": "edlink-emulator", "version": "0.1.0"}
+                "clientInfo": {"name": "edlink-emulator", "version": env!("CARGO_PKG_VERSION")}
             }),
         )?;
         if let Some(v) = result.get("protocolVersion").and_then(|v| v.as_str()) {

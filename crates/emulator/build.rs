@@ -2,8 +2,8 @@ use std::process::Command;
 
 /// Injecte les métadonnées de build (`GIT_HASH`, `BUILD_DATE`) dans le binaire
 /// via des variables d'environnement lues par `env!(...)`. Rafraîchies à chaque
-/// commit / `git add` et à chaque modification de source ou du frontend.
-fn emit_build_info() {
+/// commit / `git add` et à chaque modification de source.
+fn main() {
     let git = |args: &[&str]| -> Option<String> {
         let out = Command::new("git").args(args).output().ok()?;
         out.status
@@ -26,19 +26,7 @@ fn emit_build_info() {
         .unwrap_or_default();
     println!("cargo:rustc-env=BUILD_DATE={date}");
 
-    for p in [
-        "../../.git/HEAD",
-        "../../.git/index",
-        "build.rs",
-        "src",
-        "frontend",
-        "Cargo.toml",
-    ] {
+    for p in ["../../.git/HEAD", "../../.git/index", "build.rs", "src", "Cargo.toml"] {
         println!("cargo:rerun-if-changed={p}");
     }
-}
-
-fn main() {
-    emit_build_info();
-    tauri_build::build()
 }

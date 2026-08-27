@@ -44,8 +44,21 @@ Options:
                           propagé à l'hôte).
   --MCP_PORT <port>       Port HTTP MCP de l'hôte (défaut: 7000).
   --MCP_TOKEN <jeton>     Token Bearer MCP (obligatoire si l'hôte écoute hors loopback).
+  -V, --version           Affiche la version et quitte
   -h, --help              Affiche cette aide
 ";
+
+/// Version complète : `v<crate> (<git>, <date>)`. `GIT_HASH` / `BUILD_DATE`
+/// sont injectés par `build.rs` à chaque compilation.
+const VERSION: &str = concat!(
+    "v",
+    env!("CARGO_PKG_VERSION"),
+    " (",
+    env!("GIT_HASH"),
+    ", ",
+    env!("BUILD_DATE"),
+    ")"
+);
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -117,6 +130,10 @@ fn main() {
             "--fake-hardware" => {
                 fake_hardware = true;
             }
+            "-V" | "--version" => {
+                println!("edlink-emulator {VERSION}");
+                return;
+            }
             "-h" | "--help" => {
                 print!("{USAGE}");
                 return;
@@ -159,7 +176,7 @@ fn main() {
         }
     };
 
-    println!("=== Turbo EverDrive {device_name} — émulateur virtuel ===");
+    println!("=== Turbo EverDrive {device_name} — émulateur virtuel {VERSION} ===");
     println!("Carte SD virtuelle : {}", absolutize(&sd_dir));
     println!("Port série virtuel : {}", pair.slave_path);
     println!();

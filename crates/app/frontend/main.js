@@ -1187,6 +1187,14 @@ $("save-screen").addEventListener("click", async () => {
 })();
 
 // ---------------------------------------------------------------- init
+(async () => {
+  const b = await safeInvoke("get_build_info");
+  if (b) {
+    const el = $("app-version");
+    if (el) { el.textContent = b.label; el.title = `Application ${b.label}`; }
+    log(`Turbo Everdrive USB Tools GUI ${b.label}`, "info");
+  }
+})();
 refreshPorts();
 setInterval(refreshPorts, 4000); // rafraîchit la liste des ports
 log("Prêt. Connectez la carte puis cliquez sur Connecter.", "info");

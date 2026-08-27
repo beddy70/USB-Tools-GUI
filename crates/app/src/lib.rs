@@ -104,12 +104,34 @@ pub fn run() {
             pick_save,
             get_dropped,
             clear_dropped,
+            get_build_info,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
 
 // ------------------------------------------------------------ commandes
+
+/// Métadonnées de build, injectées par `build.rs` (mises à jour à chaque
+/// compilation : version du crate, hash git, date).
+#[derive(Serialize)]
+struct BuildInfo {
+    version: String,
+    git: String,
+    date: String,
+    label: String,
+}
+
+/// Renvoie la version de l'application et les infos de build.
+#[tauri::command]
+fn get_build_info() -> BuildInfo {
+    let version = env!("CARGO_PKG_VERSION").to_string();
+    let git = env!("GIT_HASH").to_string();
+    let date = env!("BUILD_DATE").to_string();
+    let label = format!("v{version} · {git} · {date}");
+    BuildInfo { version, git, date, label }
+}
+
 /// Liste les ports série disponibles.
 #[tauri::command]
 fn list_ports() -> Result<Vec<String>, String> {

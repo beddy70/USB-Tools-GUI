@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Permissions par défaut pour l'application Turbo Everdrive USB Tools.",
+  "description": "Permissions par défaut pour l'application Turbo Everdrive USB Tools GUI.",
   "windows": ["main"],
   "permissions": [
     "core:default",

@@ -1,7 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Turbo Everdrive USB Tools",
-  "version": "0.1.0",
+  "productName": "Turbo Everdrive USB Tools GUI",
   "identifier": "com.turbofx.everdrivetools",
   "build": {
     "frontendDist": "frontend"

@@ -1,4 +1,4 @@
-# 🕹️ Turbo Everdrive USB Tools
+# 🕹️ Turbo Everdrive USB Tools GUI
 
 Outil graphique **cross‑platform** pour la carte **Turbo EverDrive Pro / Core**
 (PC‑Engine / TurboGrafx‑16), construit avec un backend **Rust** et une interface
@@ -8,10 +8,17 @@ Il permet de gérer les fichiers sur la carte SD, de lancer des ROMs, de
 réinitialiser la console, de capturer l'écran du menu et de lire l'état de la
 carte — le tout relié à la cartouche par **USB série** (CDC).
 
-> ⚠️ **État : M2.** Protocole, interface graphique, listing SD et transferts
-> asynchrones avec barre de progression sont implémentés. La validation sur
-> matériel requiert que le **menu OS** de la cartouche soit affiché et la
-> console alimentée (voir [Vérification matérielle](#vérification-matérielle)).
+> ⚠️ **Version 0.1.1‑alpha — état : M2.** Protocole, interface graphique, listing
+> SD, transferts asynchrones avec barre de progression et visualiseur mémoire
+> sont implémentés. La validation sur matériel requiert que le **menu OS** de la
+> cartouche soit affiché et la console alimentée (voir [Vérification
+> matérielle](#vérification-matérielle)).
+>
+> La version affichée dans l'app (bas de la barre latérale) et par
+> `edlink-emulator --version` inclut le hash git et la date : elle est
+> régénérée à chaque compilation (`crates/*/build.rs`). Un `+` après le hash
+> signale un arbre de travail modifié. Numéro unique : `version` dans
+> [`Cargo.toml`](Cargo.toml) (`[workspace.package]`).
 
 ---
 
@@ -35,17 +42,17 @@ carte — le tout relié à la cartouche par **USB série** (CDC).
 |---|---|
 | **Connexion** | Détection automatique du port série de la carte (ou choix manuel) |
 | **Infos carte** (`devinf`) | Nom, n° de série, versions, compteurs, tensions |
-| **Transfert hôte ↔ SD** | Envoi (glisser‑déposer) et téléchargement de fichiers via le protocole FatFs de la carte |
+| **Carte SD** (onglet) | Explorateur ; envoi (glisser‑déposer) et téléchargement de fichiers via le protocole FatFs de la carte, avec barre de progression |
 | **Lancer un jeu** (`run`) | Déploie la ROM sur la SD (`sd:/usb-games/`) puis la lance |
 | **Reset** | Réinitialise la console |
 | **Capture d'écran** | Capture le menu de la carte (VRAM + palette → PNG) |
-| **Lecture mémoire** (`memrd`, lecture seule) | Dump de la HuCard chargée dans la RAM |
+| **Visualiseur mémoire** (lecture seule) | RAM HuCard via `memrd` ; VRAM/CRAM via l'instantané `*v` du menu |
 
 ## Architecture
 
 ```
-Turbo Everdrive USB Tools/
-├── Cargo.toml                 # workspace Rust
+Turbo Everdrive USB Tools GUI/
+├── Cargo.toml                 # workspace Rust (numéro de version unique)
 ├── crates/
 │   ├── edlink-core/           # protocole EverDrive (bibliothèque, sans GUI)
 │   │   └── src/
@@ -166,10 +173,12 @@ réinitialise son état par session. Commandes utiles :
 
 1. Branchez la cartouche en USB et affichez le **menu OS** de la carte.
 2. Lancez l'app puis **Connecter** (le port se détecte automatiquement).
-3. Onglet **Transférer** : déposez/choisissez un fichier, indiquez le dossier de
-   destination sur la SD (ex. `GAMES/`), puis **Téléverser**.
-4. Onglet **Jouer** : choisissez une ROM et **Lancer**.
+3. Onglet **Carte SD** : parcourez la carte, déposez des fichiers pour les
+   envoyer (barre de progression), double‑cliquez pour télécharger.
+4. Onglet **Jouer** : **Choisir et lancer…** déploie puis lance la ROM.
 5. **Capturer l'écran** affiche le menu de la carte (format PNG).
+6. Onglet **Mémoire** : RAM HuCard (via `memrd`), VRAM/CRAM (instantané `*v`,
+   menu affiché).
 
 ## Vérification matérielle
 
@@ -208,7 +217,9 @@ reçu (test `probe`), vérifiez :
 - **M1 ✅** Fondations : workspace, protocole, CLI, app Tauri, frontend
   retrowave, connexion, infos, transferts, run, reset, capture, memrd.
 - **M2 ✅** Listing SD via `CMD_F_DIR_*` ; transferts asynchrones (thread dédié,
-  interface réactive) + barre de progression (événement `transfer-progress`).
+  interface réactive) + barre de progression ; visualiseur mémoire (RAM en mode
+  conservateur sur matériel, VRAM/CRAM via `*v`) ; détection émulateur/matériel ;
+  version de build injectée à la compilation.
 - **M3** Sauvegarde/chargement de HuCard complète (via `memrd`/`memwr`), tests
   de vitesse USB (`usbspd`), diagnostics (`diag`).
 - **M4** Packager/icônes finales, intégration continue, validations multiplateforme.

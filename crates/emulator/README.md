@@ -52,6 +52,7 @@ Options :
   --MCP_PORT <port>     Port HTTP MCP de l'hôte (défaut : 7000)
   --MCP_TOKEN <jeton>   Token Bearer MCP (obligatoire si l'hôte écoute hors
                         loopback)
+  -V, --version        Affiche la version (crate + hash git + date) et quitte
   -h, --help            Affiche l'aide
 ```
 
@@ -64,7 +65,7 @@ Exemple :
 Au démarrage, l'émulateur affiche le chemin du port virtuel, par exemple :
 
 ```text
-=== Turbo EverDrive PRO — émulateur virtuel ===
+=== Turbo EverDrive PRO — émulateur virtuel v0.1.1-alpha (a1b2c3d, 2026-08-27) ===
 Carte SD virtuelle : /Users/eddy/SD_PCE
 Port série virtuel : /dev/ttys003
 

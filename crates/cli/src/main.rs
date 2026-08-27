@@ -1,8 +1,8 @@
 use edlink_core::{EdError, Result, Ted};
 use std::time::Instant;
 
-const USAGE: &str = "\
-edlink-cli - outil Turbo EverDrive (validation du protocole)
+const USAGE: &str = concat!("\
+edlink-cli v", env!("CARGO_PKG_VERSION"), " - outil Turbo EverDrive (validation du protocole)
 
 Usage:
   edlink-cli [--port <PORT>] devinf
@@ -15,7 +15,7 @@ Usage:
 
 Astuce : EDLINK_TRACE=1 journalise sur stderr chaque octet émis/reçu
 (utile pour valider un protocole sur matériel réel, ex: `ls`).
-";
+");
 
 struct Opts {
     port: Option<String>,
@@ -54,6 +54,10 @@ fn run() -> Result<()> {
     match opts.cmd.as_str() {
         "help" | "--help" | "-h" => {
             println!("{USAGE}");
+            Ok(())
+        }
+        "version" | "--version" | "-V" => {
+            println!("edlink-cli v{}", env!("CARGO_PKG_VERSION"));
             Ok(())
         }
         "devinf" => {
