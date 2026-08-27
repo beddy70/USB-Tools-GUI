@@ -59,6 +59,9 @@ fn run() -> Result<()> {
         "devinf" => {
             let mut ted = Ted::connect(opts.port.as_deref())?;
             print!("{}", ted.devinf()?);
+            if ted.is_emulator().unwrap_or(false) {
+                println!("target    : émulateur virtuel");
+            }
             Ok(())
         }
         "probe" => {

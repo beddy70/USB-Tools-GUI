@@ -20,6 +20,10 @@ struct DeviceInfo {
     name: String,
     port: String,
     info: String,
+    /// `true` si l'on parle à l'émulateur virtuel. Le frontend s'en sert pour
+    /// débrider le visualiseur mémoire (VRAM/CRAM, dump complet, recherche
+    /// linéaire) — interdits sur matériel réel car ils gèlent la console.
+    is_emulator: bool,
 }
 
 /// Événement de progression d'un transfert, émis vers le frontend sous le nom
@@ -121,15 +125,17 @@ fn connect(state: State<'_, AppState>, port: Option<String>) -> Result<DeviceInf
     let mut last_err = "connexion impossible".to_string();
     for attempt in 0..3 {
         match try_connect(port.as_deref()) {
-            Ok((ted, info)) => {
+            Ok((mut ted, info)) => {
                 let port_name = ted.port_name().unwrap_or_default();
                 let name = ted.device_name();
+                let is_emulator = ted.is_emulator().unwrap_or(false);
                 let mut guard = state.ted.lock().unwrap();
                 *guard = Some(ted);
                 return Ok(DeviceInfo {
                     name,
                     port: port_name,
                     info,
+                    is_emulator,
                 });
             }
             Err(e) => {
@@ -320,21 +326,27 @@ fn capture_screen(state: State<'_, AppState>, params: Option<ScreenParams>) -> R
 }
 
 /// Lecture mémoire (lecture seule) : renvoie les octets en base64.
+///
+/// Commande **asynchrone** : `CMD_MEM_RD` lit le bus FCI et gèle le CPU
+/// PC-Engine le temps du transfert. On l'exécute sur un thread dédié pour ne
+/// pas bloquer l'interface ; le frontend limite la taille et la fréquence des
+/// lectures sur matériel réel.
 #[tauri::command]
-fn memrd(
-    state: State<'_, AppState>,
-    addr: u32,
-    len: usize,
-) -> Result<MemDump, String> {
-    let data = with_ted(&state, |t| t.mem_rd(addr, len))?;
-    Ok(MemDump {
-        addr,
-        len: data.len(),
-        data_base64: base64::Engine::encode(
-            &base64::engine::general_purpose::STANDARD,
-            data,
-        ),
+async fn memrd(app: tauri::AppHandle, addr: u32, len: usize) -> Result<MemDump, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<AppState>();
+        let data = with_ted(&state, |t| t.mem_rd(addr, len))?;
+        Ok(MemDump {
+            addr,
+            len: data.len(),
+            data_base64: base64::Engine::encode(
+                &base64::engine::general_purpose::STANDARD,
+                data,
+            ),
+        })
     })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 /// Enregistre un PNG (base64) vers un chemin local.

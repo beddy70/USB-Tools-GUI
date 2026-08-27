@@ -25,6 +25,12 @@ pub struct SysInfo {
     pub boot_ver: u16,
     pub device_id: u8,
     pub flash_size: u32,
+    /// En-tête ASCII (20 octets) en tête de la réponse `CMD_SYS_INF`. Sur
+    /// matériel réel : chaîne de build du firmware. L'émulateur virtuel y place
+    /// `"TED-EMULATOR ..."`, ce qui permet à l'hôte de savoir qu'il parle à
+    /// l'émulateur (lectures mémoire libres) et non à une vraie carte (chaque
+    /// `CMD_MEM_RD` vole des cycles au CPU PC-Engine).
+    pub fw_header: String,
 }
 
 /// Tensions relevées via `CMD_GET_VDC`.
@@ -77,6 +83,14 @@ impl Ted {
         self.link.device_id()
     }
 
+    /// `true` si l'hôte parle à l'émulateur virtuel (`crates/emulator`) et non à
+    /// une vraie carte. Détecté via l'en-tête de `CMD_SYS_INF`. À utiliser pour
+    /// autoriser les lectures mémoire massives (VRAM/CRAM, dump complet,
+    /// recherche linéaire) : sur matériel réel elles gèlent le CPU PC-Engine.
+    pub fn is_emulator(&mut self) -> Result<bool> {
+        Ok(self.sys_info()?.fw_header.to_uppercase().contains("EMULATOR"))
+    }
+
     pub fn protocol_id(&self) -> u8 {
         self.link.protocol_id()
     }
@@ -90,6 +104,9 @@ impl Ted {
     pub fn sys_info(&mut self) -> Result<SysInfo> {
         self.link.tx_cmd(CMD_SYS_INF)?;
         let b = self.link.rx_data(64)?;
+        let fw_header = String::from_utf8_lossy(&b[..20])
+            .trim_matches(|c: char| c == '\0' || c.is_whitespace())
+            .to_string();
         let mut p = 20usize;
         let serial_g = u32_le_at(&b, p);
         p += 4;
@@ -127,6 +144,7 @@ impl Ted {
             boot_ver,
             device_id: b[p],
             flash_size: 1u32 << b[58],
+            fw_header,
         };
         Ok(info)
     }

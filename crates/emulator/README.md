@@ -43,6 +43,8 @@ Options :
   --sd <dossier>        Dossier local servant de carte SD virtuelle
                         (défaut : ~/SD_PCE)
   --device <type>       pro | core  (défaut : pro)
+  --fake-hardware      Se fait passer pour une vraie carte (en-tête SYS_INF) :
+                        teste le mode conservateur du visualiseur mémoire.
   --MCP_EMU <ip>        Adresse du serveur MCP de l'émulateur PC-Engine
                         (GearGraFX). Quand présent, la mémoire ROM est lue
                         depuis la zone ROM de l'hôte au lieu de la RAM

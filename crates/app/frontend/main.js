@@ -41,6 +41,16 @@ const RES_H_CHOICES = [224, 240];      // hauteur d'affichage en px
 // de ROM, un reset ou une (re)connexion, et à l'ouverture de l'onglet Mémoire.
 let invalidateMemCache = null;
 
+// Renseignée par le visualiseur mémoire : (ré)applique la politique de lecture
+// selon la cible (émulateur = lectures libres ; matériel réel = mode
+// conservateur, VRAM/CRAM masquées). Appelée après chaque (dé)connexion.
+let configureMemForDevice = null;
+
+// Vrai uniquement quand l'hôte parle à l'émulateur virtuel. Sur matériel réel,
+// chaque CMD_MEM_RD gèle le CPU PC-Engine le temps du transfert : le
+// visualiseur mémoire se met alors en mode conservateur.
+let isEmulator = false;
+
 // ---------------------------------------------------------------- journal
 function log(msg, cls = "") {
   const line = document.createElement("div");
@@ -74,9 +84,11 @@ document.querySelectorAll(".tab-btn").forEach((btn) => {
     btn.classList.add("active");
     $("tab-" + btn.dataset.tab).classList.add("active");
     if (btn.dataset.tab === "transfer") renderExplorer();
-    // À chaque ouverture de l'onglet Mémoire, on relit les données fraîches de
-    // l'émulateur (le cache de banques peut être périmé après un load/reset).
-    if (btn.dataset.tab === "memory" && invalidateMemCache) invalidateMemCache();
+    // À l'ouverture de l'onglet Mémoire : sur l'émulateur, on relit les données
+    // fraîches (le cache peut être périmé après un load/reset). Sur matériel
+    // réel, on ne lit rien automatiquement — l'utilisateur clique « Rafraîchir »
+    // (chaque lecture vole des cycles au CPU PC-Engine).
+    if (btn.dataset.tab === "memory" && isEmulator && invalidateMemCache) invalidateMemCache();
   });
 });
 
@@ -117,16 +129,23 @@ async function doConnect() {
   setConnected(true);
   els.infoCard.hidden = false;
   els.infoText.textContent = info.info;
-  log(`Nom: ${info.name} · Port: ${info.port}`, "info");
-  // La mémoire de l'émulateur est observable immédiatement : on ne garde pas
-  // de banques en cache d'une session précédente.
-  if (invalidateMemCache) invalidateMemCache();
+  isEmulator = !!info.is_emulator;
+  log(`Nom: ${info.name} · Port: ${info.port}${isEmulator ? " · émulateur" : ""}`, "info");
+  if (!isEmulator) {
+    log("Matériel réel : le visualiseur mémoire est en mode conservateur (VRAM/CRAM masquées, pas de lecture automatique). Chaque lecture gèle brièvement la console.", "info");
+  }
+  if (configureMemForDevice) configureMemForDevice(isEmulator);
+  // Sur l'émulateur, la mémoire est observable sans coût : on relit tout de
+  // suite. Sur matériel, on attend un clic explicite « Rafraîchir ».
+  if (isEmulator && invalidateMemCache) invalidateMemCache();
 }
 
 async function doDisconnect() {
   await safeInvoke("disconnect", {}, "Déconnecté");
   setConnected(false);
   els.infoCard.hidden = true;
+  isEmulator = false;
+  if (configureMemForDevice) configureMemForDevice(false);
 }
 
 $("refresh-ports").addEventListener("click", refreshPorts);
@@ -431,12 +450,13 @@ $("pick-rom").addEventListener("click", async () => {
   const res = await safeInvoke("run_rom", { rom: picked });
   if (res && !res.isErr) {
     log("Jeu lancé ✔", "ok");
-    if (invalidateMemCache) invalidateMemCache(); // la RAM contient désormais le jeu
+    // La RAM contient désormais le jeu. Relecture auto seulement sur l'émulateur.
+    if (isEmulator && invalidateMemCache) invalidateMemCache();
   }
 });
 $("reset-btn").addEventListener("click", async () => {
   await safeInvoke("reset_console", {}, "Console réinitialisée");
-  if (invalidateMemCache) invalidateMemCache(); // état mémoire potentiellement modifié
+  if (isEmulator && invalidateMemCache) invalidateMemCache(); // émulateur uniquement
 });
 
 // ---------------------------------------------------------------- écran
@@ -540,6 +560,15 @@ $("save-screen").addEventListener("click", async () => {
   const hexWrap = view.closest(".hex-wrap");
   const hexHead = hHex ? hHex.parentElement : null;
 
+  // ----- politique de lecture selon la cible -----
+  // "emu" : lectures libres (mémoire observée hors bus cartouche).
+  // "hw"  : matériel réel — chaque CMD_MEM_RD gèle le CPU PC-Engine le temps du
+  //         transfert. On lit par petits blocs, jamais automatiquement, et on
+  //         masque VRAM/CRAM (fenêtres propres à l'émulateur).
+  let readMode = "hw";           // défaut prudent tant que rien n'est connecté
+  let autoLoad = false;          // charger les chunks visibles au défilement ?
+  const memWarnEl = $("mem-warning");
+
   // ----- géométrie courante (recalculée à chaque changement de vue) -----
   let cur = VIEWS.ram;
   let START, SIZE, WORD16, UNIT_BYTES, UNITS_PER_ROW, BYTES_PER_ROW;
@@ -568,8 +597,11 @@ $("save-screen").addEventListener("click", async () => {
 
   function makeHint() {
     if (cur === VIEWS.ram) {
+      const load = autoLoad
+        ? 'Les données se chargent au fil du défilement'
+        : 'Cliquez <span class="mono">🔄 Rafraîchir</span> pour charger la zone affichée (chaque lecture gèle brièvement la console)';
       return 'RAM HuCard : <span class="mono">$000000</span> → <span class="mono">$7FFFFF</span> (8 Mo). ' +
-        'Les données se chargent au fil du défilement ; un repère <span class="mono">bank</span> apparaît toutes les 8 Ko (0x2000 octets).';
+        load + ' ; un repère <span class="mono">bank</span> apparaît toutes les 8 Ko (0x2000 octets).';
     }
     if (cur === VIEWS.vram) {
       return 'VRAM (VDC) : mémoire vidéo de 64 Ko, mots de 16 bits (32 768 mots). ' +
@@ -624,7 +656,9 @@ $("save-screen").addEventListener("click", async () => {
     } else {
       TOTAL_LINES = SIZE / BYTES_PER_ROW;
     }
-    CHUNK = Math.min(0x2000, SIZE);
+    // Bloc de lecture : 8 Ko sur l'émulateur, 1 Ko sur matériel réel (le gel du
+    // CPU PC-Engine est ~proportionnel à la taille du transfert).
+    CHUNK = Math.min(readMode === "emu" ? 0x2000 : 0x400, SIZE);
     CHUNK_CNT = Math.ceil(SIZE / CHUNK);
     SWATCHES = !!cur.swatches;
     NOASCII = !!cur.noAscii;
@@ -661,17 +695,22 @@ $("save-screen").addEventListener("click", async () => {
       .catch(() => loading.delete(chunkIndex));
   }
 
-  function renderVisible() {
+  // `doFetch` : lit les chunks visibles manquants. Par défaut suit `autoLoad`
+  // (vrai sur l'émulateur, faux sur matériel). Un appel explicite (Rafraîchir)
+  // passe `true` pour charger la zone affichée à la demande.
+  function renderVisible(doFetch = autoLoad) {
     const top = view.scrollTop;
     const vh  = view.clientHeight;
     const first = Math.max(0, Math.floor(top / LINE_H) - 2);
     const last  = Math.min(TOTAL_LINES - 1, Math.ceil((top + vh) / LINE_H) + 2);
 
-    const needed = new Set();
-    for (let L = first; L <= last; L++) {
-      if (!isGroupHeader(L)) needed.add(chunkFor(L));
+    if (doFetch) {
+      const needed = new Set();
+      for (let L = first; L <= last; L++) {
+        if (!isGroupHeader(L)) needed.add(chunkFor(L));
+      }
+      for (const c of needed) loadChunk(c, chunkAddr(c));
     }
-    for (const c of needed) loadChunk(c, chunkAddr(c));
 
     const frag = document.createDocumentFragment();
     for (let L = first; L <= last; L++) {
@@ -885,14 +924,19 @@ $("save-screen").addEventListener("click", async () => {
     searchStop.hidden = false;
     if (highlight) { highlight = null; renderVisible(); }
     const label = pat.map((b) => b.toString(16).toUpperCase().padStart(2, "0")).join(" ");
-    log("Recherche de " + label + "…", "info");
     const topL = Math.floor(view.scrollTop / LINE_H);
     const startChunk = Math.floor((lineStartAddr(topL) - START) / CHUNK);
+    // Sur matériel réel : un balayage linéaire de toute la mémoire = des
+    // milliers de CMD_MEM_RD d'affilée → console gelée > 1 min. On limite la
+    // recherche aux blocs déjà chargés (zones consultées).
+    const scanAll = readMode === "emu";
+    log("Recherche de " + label + (scanAll ? "…" : " (zones déjà affichées)…"), "info");
     try {
       for (let k = 0; k < CHUNK_CNT && !searchAbort; k++) {
         const c = (startChunk + k) % CHUNK_CNT;
         let data = cache.get(c);
         if (!data) {
+          if (!scanAll) continue; // matériel : on ne lit rien de neuf
           let dump = null;
           try { dump = await safeInvoke("memrd", { addr: chunkAddr(c), len: CHUNK }); } catch {}
           if (!dump) continue;
@@ -908,7 +952,7 @@ $("save-screen").addEventListener("click", async () => {
           return;
         }
       }
-      log("Motif introuvable", "err");
+      log(scanAll ? "Motif introuvable" : "Motif introuvable dans les zones déjà chargées (faites défiler puis relancez)", "err");
     } finally {
       searchStop.hidden = true;
     }
@@ -917,19 +961,49 @@ $("save-screen").addEventListener("click", async () => {
   searchInput.addEventListener("keydown", (e) => { if (e.key === "Enter") runSearch(); });
   searchStop.addEventListener("click", () => { searchAbort = true; });
 
+  // Boutons de bascule entre les trois vues (RAM / VRAM / CRAM).
+  const subtabBtns = document.querySelectorAll(".mem-subtab");
+  const viewIdOf = (v) => Object.keys(VIEWS).find((k) => VIEWS[k] === v);
+
   // Vide le cache des chunks chargés et relit les données fraîches de l'émulateur
   // (nécessaire après un chargement de ROM, un reset ou une reconnexion).
   invalidateMemCache = () => {
     cache.clear();
     loading.clear();
     highlight = null;
-    renderVisible();
+    renderVisible(true); // action explicite : on charge la zone visible
     if (cur.showVectors) loadVectors();
   };
 
+  // (Ré)applique la politique de lecture après une (dé)connexion. Sur matériel
+  // réel : mode conservateur + VRAM/CRAM masquées ; sur l'émulateur : tout ouvert.
+  configureMemForDevice = (isEmu) => {
+    readMode = isEmu ? "emu" : "hw";
+    autoLoad = isEmu;
+    if (memWarnEl) memWarnEl.hidden = isEmu;
+
+    subtabBtns.forEach((b) => {
+      const v = b.dataset.memview;
+      if (v === "vram" || v === "cram") b.style.display = isEmu ? "" : "none";
+    });
+
+    cache.clear();
+    loading.clear();
+    highlight = null;
+
+    // Si on quitte une carte réelle alors qu'une vue émulateur était affichée.
+    if (!isEmu && cur !== VIEWS.ram) {
+      subtabBtns.forEach((b) => b.classList.toggle("active", b.dataset.memview === "ram"));
+      view.scrollTop = 0;
+      setupGeometry("ram");
+    } else {
+      setupGeometry(viewIdOf(cur)); // recalcule CHUNK selon le nouveau mode
+    }
+    renderVisible(false);
+    if (isEmu && cur.showVectors) loadVectors();
+  };
+
   // Bascule entre les trois vues (RAM / VRAM / CRAM).
-  const subtabBtns = document.querySelectorAll(".mem-subtab");
-  const viewIdOf = (v) => Object.keys(VIEWS).find((k) => VIEWS[k] === v);
   subtabBtns.forEach((btn) => {
     btn.addEventListener("click", () => {
       if (btn.dataset.memview === viewIdOf(cur)) return;
@@ -940,7 +1014,7 @@ $("save-screen").addEventListener("click", async () => {
       highlight = null;
       view.scrollTop = 0;
       setupGeometry(btn.dataset.memview);
-      renderVisible();
+      renderVisible(true); // changement de vue = action explicite
       if (cur.showVectors) loadVectors();
     });
   });
@@ -954,15 +1028,18 @@ $("save-screen").addEventListener("click", async () => {
   });
 
   if (window.ResizeObserver) {
-    new ResizeObserver(renderVisible).observe(view);
+    new ResizeObserver(() => renderVisible(false)).observe(view);
   } else {
-    window.addEventListener("resize", renderVisible);
+    window.addEventListener("resize", () => renderVisible(false));
   }
 
   setupGeometry("ram");
-  renderVisible();
   buildVecList();
-  loadVectors();
+  // État par défaut = conservateur (rien de connecté). `configureMemForDevice`
+  // sera rappelé à la connexion avec la vraie nature de la cible.
+  configureMemForDevice(false);
+  // Pas de lecture au démarrage : rien n'est connecté. Les vecteurs sont lus à
+  // la (re)connexion (émulateur) ou au clic « Rafraîchir » (matériel).
 
   // Rafraîchit la vue courante : vide le cache (et les relectures en cours),
   // relit les données fraîches de l'émulateur, et recharge les vecteurs si besoin.
@@ -971,17 +1048,47 @@ $("save-screen").addEventListener("click", async () => {
     invalidateMemCache();
   });
 
+  // Encodage base64 d'un Uint8Array, par tranches (btoa plante sur un très gros
+  // argument via String.fromCharCode).
+  function bytesToB64(bytes) {
+    let bin = "";
+    const step = 0x8000;
+    for (let i = 0; i < bytes.length; i += step) {
+      bin += String.fromCharCode.apply(null, bytes.subarray(i, i + step));
+    }
+    return btoa(bin);
+  }
+
   $("mem-save").addEventListener("click", async () => {
     const defaultName = cur === VIEWS.ram ? "memdump.bin" : (cur === VIEWS.vram ? "vram.bin" : "cram.bin");
+
+    // Dump complet = lecture de toute la fenêtre. Sur matériel réel, ça vole
+    // beaucoup de cycles au CPU PC-Engine : on lit par blocs (la console
+    // respire entre chaque) et on prévient l'utilisateur.
+    if (readMode !== "emu") {
+      const secs = Math.ceil(SIZE / 90000); // ~90 Ko/s utiles
+      if (!confirm(
+        `Enregistrer ${cur.label} (${fmtSize(SIZE)}) demande de lire toute la zone ` +
+        `sur la carte : la console va saccader pendant ~${secs} s et le jeu en ` +
+        `cours peut planter. Continuer ?`)) return;
+    }
+
     const path = await safeInvoke("pick_save", { default_name: defaultName });
     if (!path) return;
-    log("Lecture de " + cur.label + " (" + SIZE + " octets)…");
-    const dump = await safeInvoke("memrd", { addr: START, len: SIZE });
-    if (!dump) return;
-    const bytes = Uint8Array.from(atob(dump.data_base64), (c) => c.charCodeAt(0));
-    const ok = await safeInvoke("save_png", { data_base64: dump.data_base64, path });
+
+    const BLOCK = readMode === "emu" ? 0x40000 : 0x4000;
+    const out = new Uint8Array(SIZE);
+    log("Lecture de " + cur.label + " (" + fmtSize(SIZE) + ")…");
+    for (let off = 0; off < SIZE; off += BLOCK) {
+      const len = Math.min(BLOCK, SIZE - off);
+      const dump = await safeInvoke("memrd", { addr: START + off, len });
+      if (!dump) { log("Lecture interrompue à " + hexAddr(START + off), "err"); return; }
+      out.set(Uint8Array.from(atob(dump.data_base64), (c) => c.charCodeAt(0)), off);
+      if (SIZE > BLOCK) log(`  ${Math.round((off + len) * 100 / SIZE)} %`, "");
+    }
+    const ok = await safeInvoke("save_png", { data_base64: bytesToB64(out), path });
     if (ok === null) return;
-    log(cur.label + " enregistrée : " + path + " (" + bytes.length + " octets)", "ok");
+    log(cur.label + " enregistrée : " + path + " (" + out.length + " octets)", "ok");
   });
 })();
 // ---------------------------------------------------------------- séparateur

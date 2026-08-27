@@ -34,6 +34,9 @@ Usage:
 Options:
   --sd <dossier>          Dossier local utilisé comme carte SD virtuelle (défaut: ~/SD_PCE)
   --device <type>         pro | core  (défaut: pro)
+  --fake-hardware         L'émulateur se fait passer pour une vraie carte
+                          (en-tête SYS_INF) : sert à tester le mode conservateur
+                          du visualiseur mémoire de l'interface.
   --MCP_EMU <ip>          Adresse du serveur MCP de l'émulateur PC-Engine (GearGraFX).
                           Quand ce flag est présent, la mémoire ROM servie par la carte
                           est lue/écrite depuis la zone ROM de l'émulateur hôte au lieu
@@ -54,6 +57,7 @@ fn main() {
     let mut mcp_emu: Option<String> = None;
     let mut mcp_port: u16 = 7000;
     let mut mcp_token: Option<String> = None;
+    let mut fake_hardware = false;
     let mut i = 0;
     while i < args.len() {
         match args[i].as_str() {
@@ -109,6 +113,9 @@ fn main() {
                     eprintln!("--MCP_TOKEN nécessite une valeur");
                     std::process::exit(2);
                 }
+            }
+            "--fake-hardware" => {
+                fake_hardware = true;
             }
             "-h" | "--help" => {
                 print!("{USAGE}");
@@ -179,6 +186,10 @@ fn main() {
     };
 
     let mut dev = Device::new(sd, device_id, mcp);
+    dev.set_fake_hardware(fake_hardware);
+    if fake_hardware {
+        println!(">> --fake-hardware : l'émulateur se fait passer pour une vraie carte");
+    }
     match dev.run(&mut pair.master) {
         Ok(()) => println!("\nhôte déconnecté, arrêt de l'émulateur."),
         Err(e) => eprintln!("\nerreur de l'émulateur : {e}"),

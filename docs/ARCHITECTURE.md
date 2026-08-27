@@ -90,6 +90,27 @@ depuis le JS. On gère donc le *drop* côté Rust : `on_window_event` intercepte
 l'événement `files-dropped` vers le frontend (qui les affiche puis appelle
 `upload`).
 
+## Visualiseur mémoire : émulateur vs matériel
+
+`CMD_MEM_RD` lit le bus cartouche et **gèle le CPU PC-Engine** le temps du
+transfert (cf. `docs/PROTOCOL.md`). Le visualiseur a été conçu pour l'émulateur,
+où la mémoire est observée hors bus (gratuit). Sur matériel il passe en **mode
+conservateur** :
+
+| | émulateur | matériel réel |
+|---|---|---|
+| bloc de lecture | 8 Ko | 1 Ko |
+| lecture au défilement | auto | manuelle (« Rafraîchir ») |
+| relecture auto (connexion / load / reset) | oui | non |
+| recherche | balayage complet | zones déjà chargées seulement |
+| dump complet | 1 lecture | blocs de 16 Ko + confirmation |
+| onglets VRAM / CRAM | visibles | masqués |
+
+La bascule vient de `DeviceInfo.is_emulator` (renvoyé par `connect`), déduit de
+l'en-tête `CMD_SYS_INF` (`Ted::is_emulator`). Côté frontend, `connect` appelle
+`configureMemForDevice(isEmulator)`. `memrd` est une commande **async**
+(`spawn_blocking`) pour ne pas geler l'interface pendant le transfert.
+
 ## Ajouter une commande
 
 1. Dans `edlink-core` (`ted.rs`), ajouter une méthode publique si nécessaire.

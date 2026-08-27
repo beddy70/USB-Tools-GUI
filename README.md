@@ -195,6 +195,10 @@ reçu (test `probe`), vérifiez :
   trame réelle et ajuster — cf. `docs/PROTOCOL.md`).
 - **TED Pro non compatible RTC** via `edlink` (`RtcSet`/`RtcCal` lèvent
   `UnsupportedCmd`) : le RTC n'est pas exposé.
+- **Lecture mémoire (`memrd`) = bus cartouche** : sur matériel réel, chaque
+  lecture gèle brièvement le CPU PC-Engine (temps ∝ taille). Le visualiseur
+  mémoire passe en mode conservateur hors émulateur (petits blocs, pas de
+  lecture auto, VRAM/CRAM masquées). Cf. `docs/PROTOCOL.md`.
 - Non testé sur matériel tant que le menu OS n'est pas accessible.
 
 ## Feuille de route

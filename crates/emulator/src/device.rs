@@ -86,6 +86,10 @@ pub struct Device {
     /// présent, les lectures/écritures de la RAM0 (HuCard) sont servies depuis
     /// la zone ROM de l'hôte au lieu de la RAM virtuelle locale.
     mcp: Option<McpClient>,
+    /// Test : si vrai, `CMD_SYS_INF` renvoie un en-tête « matériel » au lieu de
+    /// `"TED-EMULATOR"`, pour que l'hôte croie parler à une vraie carte (mode
+    /// conservateur du visualiseur mémoire). Activé par `--fake-hardware`.
+    fake_hardware: bool,
 }
 
 impl Device {
@@ -111,9 +115,15 @@ impl Device {
             palette: vec![0u8; 1024],
             dump_addr: DUMP_ADDR,
             mcp,
+            fake_hardware: false,
         };
         dev.gen_menu_image();
         dev
+    }
+
+    /// Test : fait passer l'émulateur pour une vraie carte (en-tête `SYS_INF`).
+    pub fn set_fake_hardware(&mut self, on: bool) {
+        self.fake_hardware = on;
     }
 
     /// Boucle principale : gère les connexions/déconnexions de l'hôte et
@@ -578,7 +588,12 @@ impl Device {
     fn sys_info(&self) -> [u8; 64] {
         let mut b = [0u8; 64];
         let mut hdr = [0u8; 20];
-        hdr[..17].copy_from_slice(b"TED-EMULATOR v1.0");
+        let tag: &[u8] = if self.fake_hardware {
+            b"TurboEverDrive Pro" // imite une vraie carte (test du mode conservateur)
+        } else {
+            b"TED-EMULATOR v1.0"
+        };
+        hdr[..tag.len()].copy_from_slice(tag);
         b[..20].copy_from_slice(&hdr);
         let mut p = 20usize;
         put_u32(&mut b, &mut p, 0x5445_4450); // serial_g "TEDP"

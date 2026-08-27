@@ -127,6 +127,42 @@ EDLINK_TRACE=1 edlink-cli --port /dev/cu.usbmodemXXXX ls sd:/GAMES
 
 Référence : `DEV_TED/MenuCmd.cs`, `DEV_TED/DeviceIO.cs`, `DeviceCmd.AppDeploy`.
 
+### Lecture mémoire (`CMD_MEM_RD`)
+
+```text
+TX  CMD_MEM_RD                        trame 4 octets
+TX  u32 addr                          adresse sur le bus FCI (little-endian)
+TX  u32 len                           nombre d'octets
+TX  u8  0                             "exec"
+RX  len octets                        (aucun acquittement, flux direct)
+```
+
+Port de `DeviceIO_V1.MemRD`. `addr` adresse le **bus cartouche (FCI)** :
+`0x000000`–`0x7FFFFF` = RAM0 (HuCard chargée), `0x800000`+ = RAM1 (Pro),
+`0x1800000` = config, `0x1810000` = FIFO.
+
+> ⚠️ **Sur matériel réel, `CMD_MEM_RD` gèle le CPU PC-Engine** pendant toute la
+> durée du transfert (le MCU prend le bus cartouche). Le temps de gel est
+> proportionnel à `len` (~90 Ko/s utiles → 8 Ko ≈ 90 ms, 8 Mo ≈ 90 s). La
+> référence n'utilise `memrd` que comme **diagnostic**, sur de petites plages,
+> et jamais en attendant qu'un jeu continue de tourner normalement. Il n'existe
+> pas de « pause/peek/resume » : `CMD_HOST_RST` ne fait que OFF/ON (reset franc).
+>
+> Conséquence côté outil : le visualiseur mémoire lit par **petits blocs**
+> (1 Ko), **jamais automatiquement** (clic « Rafraîchir »), et n'expose pas de
+> recherche linéaire ni de dump complet en un coup sur matériel. Les vues
+> **VRAM / CRAM** n'existent que pour l'émulateur : la mémoire du VDC/VCE est
+> interne à la console, elle n'est pas sur le bus FCI.
+
+### Détection émulateur vs matériel
+
+Les 20 premiers octets de la réponse `CMD_SYS_INF` sont un en-tête ASCII (chaîne
+de build du firmware sur matériel). L'émulateur virtuel y place
+`"TED-EMULATOR ..."` ; `Ted::is_emulator()` teste la présence de `"EMULATOR"`.
+L'interface s'en sert pour débrider le visualiseur mémoire (lectures libres,
+VRAM/CRAM) uniquement en émulation. `edlink-emulator --fake-hardware` force un
+en-tête « matériel » pour tester le mode conservateur.
+
 ## Adresses mémoire clés (Turbo EverDrive Pro)
 
 | Adresse | Rôle |
