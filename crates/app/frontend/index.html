@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Turbo Everdrive USB Tools</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">
+        <span class="logo">▮▮</span>
+        <div class="brand-text">
+          <h1>Turbo Everdrive <span class="accent">USB Tools</span></h1>
+          <span class="sub">PC-Engine / TurboGrafx-16 · Turbo Everdrive Pro</span>
+        </div>
+      </div>
+      <div class="conn-status" id="conn-status">
+        <span class="dot" id="conn-dot"></span>
+        <span id="conn-label">Déconnecté</span>
+      </div>
+    </header>
+
+    <div class="layout">
+      <aside class="sidebar">
+        <nav>
+          <button class="tab-btn active" data-tab="connect"><span>🔌</span> Connexion</button>
+          <button class="tab-btn" data-tab="transfer"><span>📤</span> Transférer</button>
+          <button class="tab-btn" data-tab="play"><span>🎮</span> Jouer</button>
+          <button class="tab-btn" data-tab="memory"><span>🧠</span> Mémoire</button>
+        </nav>
+        <div class="sidebar-footer">v0.1.0 · M1</div>
+      </aside>
+
+      <main class="content">
+        <!-- CONNEXION -->
+        <section id="tab-connect" class="tab-panel active">
+          <h2>Connexion à la carte</h2>
+          <div class="row">
+            <label for="port-select">Port série</label>
+            <select id="port-select"></select>
+            <button class="btn ghost" id="refresh-ports">⟳</button>
+            <button class="btn primary" id="connect-btn">Connecter</button>
+            <button class="btn danger ghost" id="disconnect-btn">Déconnecter</button>
+          </div>
+          <div class="row">
+            <label for="port-manual">Port manuel (émulateur / PTY)</label>
+            <input id="port-manual" type="text" placeholder="/dev/ttys001" />
+            <span class="hint">Pour l'émulateur virtuel (edlink-emulator), saisissez ici le chemin du port virtuel affiché au lancement. Vide = liste ci-dessus.</span>
+          </div>
+          <div class="card info-card" id="info-card" hidden>
+            <pre id="info-text"></pre>
+          </div>
+        </section>
+
+        <!-- TRANSFERT : EXPLORATEUR -->
+        <section id="tab-transfer" class="tab-panel">
+          <h2>Explorateur de carte SD</h2>
+          <div class="explorer-toolbar">
+            <div class="crumbs" id="crumbs"></div>
+            <button class="btn ghost" id="explorer-up" title="Dossier parent">⬆</button>
+            <button class="btn ghost" id="explorer-refresh" title="Actualiser">⟳</button>
+            <div class="view-toggle">
+              <button class="btn ghost view-btn active" id="view-icons" title="Vue en icônes">▦</button>
+              <button class="btn ghost view-btn" id="view-list" title="Vue en liste">☰</button>
+            </div>
+            <button class="btn primary" id="explorer-import">📂 Importer…</button>
+          </div>
+
+          <div class="explorer" id="explorer">
+            <div class="explorer-empty" id="explorer-empty" hidden>
+              <p><strong>Glissez-déposez</strong> des fichiers ici pour les envoyer sur la carte,<br />ou cliquez sur « 📂 Importer… ».</p>
+            </div>
+          </div>
+          <div class="explorer-status" id="explorer-status"></div>
+        </section>
+
+        <!-- JOUER -->
+        <section id="tab-play" class="tab-panel">
+          <h2>Lancer un jeu</h2>
+          <div class="row">
+            <label for="rom-path">ROM (local ou sd:chemin)</label>
+            <input id="rom-path" type="text" placeholder="Choisir via le bouton…" readonly />
+            <button class="btn ghost" id="pick-rom">Parcourir…</button>
+            <button class="btn primary" id="run-btn">▶ Lancer</button>
+          </div>
+          <div class="row">
+            <button class="btn warning" id="reset-btn">⟲ Reset console</button>
+            <button class="btn primary" id="screen-btn">📷 Capturer l'écran</button>
+          </div>
+          <div class="card screen-card" id="screen-card" hidden>
+            <h3>Capture du menu</h3>
+            <img id="screen-img" alt="Capture" />
+            <div class="row">
+              <button class="btn ghost" id="save-screen">💾 Enregistrer le PNG…</button>
+            </div>
+          </div>
+        </section>
+
+        <!-- MEMOIRE -->
+        <section id="tab-memory" class="tab-panel">
+          <h2>Visualiseur mémoire (lecture seule)</h2>
+          <p class="hint">
+            RAM HuCard : <span class="mono">$000000</span> → <span class="mono">$7FFFFF</span> (8 Mo).
+            Les données se chargent au fil du défilement ; un repère <span class="mono">bank</span> apparaît toutes les 8 Ko (0x2000 octets).
+          </p>
+          <div class="hex-toolbar">
+            <label for="mem-go">Aller à 0x</label>
+            <input id="mem-go" class="hex-go" type="text" value="$000000" spellcheck="false" />
+            <button class="btn ghost" id="mem-go-btn">Aller</button>
+            <label for="mem-bank">bank n°</label>
+            <input id="mem-bank" class="hex-go2" type="number" min="0" max="1023" value="0" />
+            <button class="btn ghost" id="mem-bank-btn">Aller</button>
+            <input id="mem-search" class="hex-search" type="text" placeholder="Rechercher hex/ascii…" spellcheck="false" />
+            <button class="btn ghost" id="mem-search-btn">🔎</button>
+            <button class="btn ghost" id="mem-search-stop" hidden>⏹</button>
+            <span class="hex-pos" id="mem-pos"></span>
+            <button class="btn ghost" id="mem-save">💾 Sauver…</button>
+          </div>
+          <div class="mem-layout">
+            <aside class="vec-panel">
+              <h3>Vecteurs d'interruption <span class="vec-chip">PC-Engine</span></h3>
+              <p class="vec-note">HuC6280 · banque 0 · à partir de <span class="mono">$1FF6</span> · valeurs lues en RAM</p>
+              <ul class="vec-list" id="vec-list"></ul>
+            </aside>
+            <div class="hex-wrap">
+              <div class="hex-head">
+                <span class="h-off">Offset</span>
+                <span class="h-hex">00 01 02 03 04 05 06 07 08 09 0A 0B 0C 0D 0E 0F</span>
+                <span class="h-asc">ASCII</span>
+              </div>
+              <div class="hex-view" id="hex-view">
+                <div class="hex-spacer" id="hex-spacer"></div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <div class="splitter" id="splitter" title="Redimensionner"></div>
+
+    <footer class="logbar">
+      <span class="log-title">Journal</span>
+      <div id="log" class="log"></div>
+    </footer>
+  </div>
+  <script src="main.js"></script>
+</body>
+</html>

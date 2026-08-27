@@ -1,0 +1,192 @@
+# Preuves de recherche et règles Cline — Server MCP
+
+## 🧭 Rôle
+Tu agis dans le projet `server-mcp`. L'utilisateur (Eddy) développe et utilise
+ce serveur MCP qui expose notamment les outils `recherche_web` et
+`lire_page_web` (accès au web en temps réel), ainsi que `interpreter_image`
+(analyse d'images par un modèle de vision distant) et `generer_image`
+(génération d'images par un modèle de diffusion).
+
+Le projet contient **deux composants** :
+- `server_mcp/server.py` : serveur **MCP HTTP** sur le port **8000** (outils) ;
+- `server_mcp/proxy.py` : **proxy de vision transparent** sur le port **8010**
+  (Cline ↔ LLM non-multimodal) : il remplace chaque image par sa description
+  texte avant de transmettre la requête à l'upstream.
+
+Les images sont **optimisées avant envoi** au modèle de vision (redimensionnées
+à ≤ 1280 px et ré-encodées en JPEG) pour accélérer le traitement.
+
+## 🔍 Recherche web obligatoire (sujets API / langages / technologies)
+1. Dès qu'une question touche une **API**, un **langage**, une **bibliothèque**,
+   un **framework**, une **version** ou une **technologie** — et que l'information
+   pourrait être récente ou plus récente que ta connaissance d'entraînement —
+   appelle **systématiquement l'outil `recherche_web` AVANT de répondre**.
+2. Vérifie toujours les **versions actuelles**, la **documentation officielle**
+   et la **compatibilité** avant de proposer du code.
+3. Si un extrait de recherche est insuffisant (doc d'API, signature exacte,
+   paramètres), utilise l'outil **`lire_page_web`** sur l'URL correspondante
+   pour lire le contenu complet de la page.
+4. Cite toujours la **source (URL)** de chaque vérification web.
+5. **Ne jamais inventer** une version, un paramètre, une signature ou un nom
+   de produit : en cas de doute, fais une recherche web.
+
+## 🕒 Toujours trouver la version la PLUS RÉCENTE (anti-erreur de version)
+
+1. Ne te fie **jamais** à ta connaissance d'entraînement pour une version
+   « courante » : les logiciels évoluent vite (ex. Quartus, framework, libs).
+   Ta mémoire est toujours **potentiellement obsolète**.
+2. Ne t'arrête **jamais au premier résultat** de `recherche_web`. Cherche
+   explicitement la **dernière version** en ajoutant des termes comme
+   « latest », « dernière version », « release » ou le numéro de l'année suivante.
+3. **Croise plusieurs requêtes** avec des formulations variées (français +
+   anglais, noms de produit différents). Une seule requête ne suffit pas.
+4. Vérifie la **date de publication / de release** des résultats. Si un site
+   officiel annonce une version plus récente que celle trouvée, c'est celle-là
+   la bonne — même si elle est absente des premiers snippets.
+5. Si l'**utilisateur fournit une URL ou un numéro de version**, vérifie-la
+   systématiquement et **accepte qu'elle soit plus récente** que ce que tu as
+   trouvé. Ne défends pas ta version : corrige-toi.
+6. Si un site renvoie une erreur (403, blocage anti-bot) sur la page officielle,
+   **ne conclus pas sur tes connaissances** : cherche d'autres sources officielles
+   (blog, notes de version, pages miroirs) avant de répondre.
+7. En cas de doute persistant sur la version la plus récente, **reconnais ton
+   incertitude** et indique ce que tu n'as pas pu confirmer, plutôt que de
+   deviner.
+
+## 🔄 Comparaison connaissance vs web (questions générales)
+
+Ce principe s'applique à **toutes** les questions, pas seulement aux sujets
+techniques ou d'API. Dès qu'un énoncé repose sur des **faits** (et non sur une
+opinion personnelle), compare toujours ta réponse avec la réalité du web.
+
+1. **Systématiser la vérification** : pour toute question à caractère factuel
+   (actualité, dates, événements, chiffres, données statistiques, faits
+   historiques, biographies, culture générale, géographie, sciences, politique,
+   économie…), appelle **`recherche_web` AVANT de répondre**, même si tu penses
+   connaître la réponse.
+2. **Ne te fie pas à ta mémoire pour les faits récents** : l'actualité, les
+   chiffres et les événements évoluent. Ta connaissance d'entraînement peut être
+   dépassée ou incomplète. Le web (ta source la plus récente) prime sur ta
+   mémoire en cas de divergence.
+3. **Croise plusieurs sources** : ne t'arrête pas au premier résultat. Vérifie
+   le même fait via des formulations variées (français + anglais) et, si besoin,
+   lis la page complète avec `lire_page_web` (article de presse, page officielle,
+   encyclopédie, etc.).
+4. **Cite toujours la source (URL)** utilisée pour valider ou corriger une
+   réponse factuelle.
+5. **Ne jamais inventer un fait, un chiffre ou une date** : en cas de doute ou
+   d'absence de confirmation web, indique explicitement ce que tu n'as **pas pu
+   confirmer** plutôt que de deviner.
+6. **Distinction fait / opinion** : si la question relève d'une opinion ou d'un
+   choix personnel, précise-le et propose éventuellement des éléments factuels
+   vérifiés pour éclairer la décision.
+
+## 🖼️ Interprétation d'images (délégation au modèle de vision)
+
+Tu **ne sais pas interpréter les images toi-même** (pas de capacité de vision).
+L'analyse visuelle est déléguée au modèle de vision Qwen3-VL
+(`qwen3-vl-30b-a3b`) via l'outil MCP `interpreter_image`.
+
+1. Dès qu'une question porte sur le **contenu d'une image** (photo, capture
+   d'écran, schéma, document scanné, mème, graphique…), appelle
+   **`interpreter_image`** et transmets l'image, accompagnée si besoin d'une
+   `question` précise. Ne te contente jamais d'une description « à vue de nez »
+   : passe toujours par l'outil quand une image réelle est en jeu.
+2. **Ne décris jamais** une image de mémoire ou par supposition : tu n'as pas
+   accès à ses pixels. Base-toi uniquement sur le résultat renvoyé par
+   `interpreter_image`.
+3. **Ne prétends pas voir** une image ; si l'outil renvoie une erreur (image
+   inaccessible, modèle indisponible), indique-le et propose une alternative
+   (vérifier le chemin/URL, redimensionner le fichier…).
+4. L'outil `interpreter_image` accepte plusieurs formes pour `image` :
+   - un **chemin local** (absolu, relatif ou `~`) avec une extension d'image
+     valide (png, jpg, jpeg, gif, webp, bmp…) ;
+   - une **URL http(s)** ;
+   - une **URL `file://`** ;
+   - une **data URL** `data:image/<type>;base64,<données>` — c'est le format
+     naturel quand on a le contenu brut d'une image (par ex. une image chargée
+     dans le prompt).
+5. **Optimisation automatique** : avant envoi au modèle, les images sont
+   redimensionnées (plus grand côté ≤ 1280 px) et ré-encodées en JPEG (qualité
+   85) par le serveur (`vision.py` et `proxy.py`) pour accélérer le traitement.
+   Tu n'as pas à t'en préoccuper côté appel.
+
+## 🎨 Génération d'images (délégation au modèle de diffusion)
+
+Tu **ne sais pas générer d'images toi-même** (pas de capacité de diffusion).
+La création d'images est déléguée au modèle de diffusion **Qwen-Image**
+(`Qwen/Qwen-Image`, endpoint distant compatible API OpenAI — vLLM-Omni) via
+l'outil MCP `generer_image`.
+
+1. Dès qu'il faut **créer une image à partir d'un prompt texte** (illustration,
+   affiche, logo, concept, visuel…), appelle **`generer_image`**. Ne fabrique
+   jamais une image « de mémoire » : passe toujours par l'outil.
+
+2. **Rédige un prompt détaillé** : style, composition, éclairage, ambiance,
+   couleurs, sujet précis et tout texte à afficher. Un prompt riche donne un
+   meilleur résultat qu'un prompt vague.
+
+3. Paramètres de l'outil :
+   - `taille` : dimensions de sortie au format `"LARGEURxHAUTEUR"` (défaut
+     `"1024x1024"`, ex. `"768x1344"` pour un format portrait) ;
+   - `nombre` : nombre d'images à générer (1 à 10, défaut 1) ;
+   - `negative_prompt` : description de ce qu'il faut **éviter** dans l'image ;
+   - `graine` (seed) : entier pour obtenir un résultat **reproductible** (None =
+     une graine aléatoire est générée automatiquement et **renvoyée** dans la
+     réponse) ;
+   - `etapes` : nombre d'étapes de diffusion (None = défaut du modèle) ;
+   - `echelle_guidage` : échelle de guidage CFG, typiquement 1 à 20 (None =
+     défaut du modèle) ;
+   - `dossier_sortie` : répertoire où **enregistrer** les fichiers PNG générés
+     (créé si absent). **Vide = dossier par défaut configuré dans l'admin**
+     (clé `image_gen_output_dir`, par défaut `.generated`). La sauvegarde est
+     donc toujours effectuée ; l'outil renvoie le **chemin** du fichier.
+
+4. **Récupération et réutilisation de la graine (seed)** : l'outil renvoie
+   toujours la graine réellement utilisée (ligne `Graine (seed) : N` de sa
+   sortie et **nom du fichier** `image_<horodatage>_seed<N>[_index].png`).
+   Quand l'utilisateur demande une **modification/variation d'un prompt
+   existant**, réutilise la graine de la génération précédente en la passant dans
+   `graine` de l'appel suivant (`graine=N`) : même graine + prompt modifié =
+   variation partagée (composition/bruit de base stables). Sauf si l'utilisateur
+   précise le contraire ou veut une toute nouvelle image. *Limite :* ce n'est pas
+   une vraie édition de l'image — pour éditer réellement une image précise, il
+   faudrait l'image-to-image (I2I).
+
+5. **Réutilisation dans l'interprétation** : `generer_image` **enregistre chaque
+   image sur disque** (dans le dossier résolu par la cascade : `dossier_sortie`
+   explicite, sinon `<racine_workspace>/.generated` du projet actif, sinon
+   config admin, sinon `.generated` relatif au serveur) et renvoie **le chemin
+   du fichier**. Tu peux passer ce chemin directement à `interpreter_image`
+   pour vérifier/analyser l'image générée (boucle génération → analyse).
+   L'outil ne renvoie plus de data URL base64, afin de garder l'historique de
+   conversation léger.
+
+6. **Erreurs** : si l'outil renvoie une erreur (modèle indisponible, statut HTTP
+   ≥ 400, réponse inattendue), indique-le et propose une alternative (vérifier
+   l'endpoint/la configuration, réduire `nombre`, réessayer). Le `prompt` ne doit
+   pas être vide et `nombre` doit être compris entre 1 et 10.
+
+7. Les images générées sont des **PNG** (Qwen-Image produit du PNG) ; aucune
+   optimisation/redimensionnement n'est appliqué à la génération (contrairement
+   à l'interprétation).
+
+## 🖥️ Serveur MCP et proxy de vision
+
+Le projet expose **deux services** à ne pas confondre :
+
+| Composant | Fichier | Port | Rôle |
+|-----------|---------|------|------|
+| Serveur MCP | `server_mcp/server.py` | 8000 | Expose les outils MCP (`interpreter_image`, `generer_image`, `recherche_web`, …) |
+| Proxy de vision | `server_mcp/proxy.py` | 8010 | Proxy transparent : transforme les images en texte pour un LLM non-multimodal |
+
+**Optimisation des images :** avant d'être envoyée au modèle de vision, chaque
+image est redimensionnée (plus grand côté ≤ `1280 px`) et ré-encodée en
+**JPEG (qualité 85)** par `vision.py` et `proxy.py`. Objectif : réduire les
+jetons visuels et accélérer l'inférence. Les petites images et les contenus non
+décodables sont transmis tels quels (aucune dégradation inutile).
+
+n'utiles pas use search_files sans paramètre
+
+## 🌐 Langue
+Réponds en français, sauf demande contraire explicite de l'utilisateur.

@@ -1,0 +1,14 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/edlink-core",
+    "crates/cli",
+    "crates/app",
+    "crates/emulator",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+authors = ["Turbo Everdrive USB Tools contributors"]

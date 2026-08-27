@@ -1,0 +1,23 @@
+# Rust / Cargo
+target/
+Cargo.lock
+
+# Tauri / générés
+crates/app/gen/
+crates/app/icon-source.png
+
+# macOS
+.DS_Store
+
+# Référence clonée (source officielle edlink)
+reference/
+
+# Divers
+*.log
+/tmp/
+
+# Builds / binaires publiés
+dist-windows/
+edlink-app-windows-x64/
+*.zip
+

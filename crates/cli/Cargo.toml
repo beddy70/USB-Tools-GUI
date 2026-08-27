@@ -1,0 +1,14 @@
+[package]
+name = "edlink-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Interface en ligne de commande de test/validation pour edlink-core"
+
+[[bin]]
+name = "edlink-cli"
+path = "src/main.rs"
+
+[dependencies]
+edlink-core = { path = "../edlink-core" }
+serialport = "4"

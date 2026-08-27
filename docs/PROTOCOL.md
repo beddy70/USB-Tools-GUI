@@ -1,0 +1,111 @@
+# Protocole EverDrive — port Rust
+
+Ce document décrit le protocole série implémenté dans `edlink-core` et sa
+correspondance avec la référence officielle [`krikzz/edlink`](https://github.com/krikzz/edlink)
+(MIT). Le port vise la **Turbo EverDrive Pro / Core** (protocole V1, génération
+**Gen3**).
+
+## Transport série
+
+- Débit : **921 600 bauds**, 8N1, via CDC USB.
+- Sur macOS, ouvrir le port **`/dev/cu.*`** (call‑up) et non `/dev/tty.*`.
+- Le handshake initial envoie **66 octets nuls** puis purge le flux entrant.
+- La référence effectue un **cold start** : si le premier essai échoue, on
+  attend 100 ms et on retente une fois (`Link.cs → Open()`).
+
+Référence : `reference/edlink/edlink/Device/Link.cs`.
+
+## Format des trames de commande
+
+Chaque commande est une trame de 4 octets :
+
+```
+['+' (0x2B), '+'^0xFF (0xD4), CODE, CODE^0xFF]
+```
+
+`TxCMD(code)` envoie ces 4 octets. Les entiers sont transmis en **little‑endian**
+pour la TED (la référence force `SwapEndians = false` dans le constructeur du
+pilote TED — `DEV_TED/DeviceIO.cs`).
+
+## Identification de l'appareil
+
+1. `TxCMD(CMD_STATUS2 = 0x40)` puis `TxCMD(CMD_STATUS = 0x10)` ;
+2. lecture de 2 octets : si `id[0] == 0x5A` (STATUS_KEY) → protocole **Gen3**
+   (cas TED), on lit 2 octets supplémentaires d'identité ;
+3. `protocol_id` et `device_id` sont lus. Pour la TED : `protocol_id = 0x02`,
+   `device_id = 0x20` (Pro) ou `0x26` (Core).
+
+Référence : `Link.cs → GetDeviceConfig()` / `GetID()`.
+
+## Commandes implémentées
+
+| Constante | Code | Opération | Référence C# |
+|---|---|---|---|
+| `CMD_SYS_INF` | 0x26 | Infos système (64 octets) | `DeviceIO_V1.GetSysInf` |
+| `CMD_GET_VDC` | 0x13 | Tensions | `DeviceIO_V1.GetVdc` |
+| `CMD_MEM_RD` | 0x19 | Lecture mémoire | `DeviceIO_V1.MemRD` |
+| `CMD_MEM_WR` | 0x1A | Écriture mémoire (interne) | `DeviceIO_V1.MemWR` |
+| `CMD_HOST_RST` | 0x29 | Reset hôte | `DEV_TED/DeviceIO.HostReset` |
+| `CMD_F_FOPN` | 0xC9 | Ouverture fichier | `DeviceIO_V1.FileOpen` |
+| `CMD_F_FRD` | 0xCA | Lecture fichier | `DeviceIO_V1.FileRead` |
+| `CMD_F_FWR` | 0xCC | Écriture fichier | `DeviceIO_V1.FileWrite` |
+| `CMD_F_FCLOSE` | 0xCE | Fermeture fichier | `DeviceIO_V1.FileClose` |
+| `CMD_F_AVB` | 0xD5 | Taille fichier | `DeviceIO_V1.FileAvailable` |
+| `CMD_F_DIR_MK` | 0xD2 | Créer dossier | `DeviceIO_V1.DirMake` |
+
+### Système de fichiers SD (FatFs-like)
+
+- Ouverture : `FOPN`, drapeau `mode`, puis chaîne de chemin (`u16` longueur +
+  UTF‑8). Flags : `FA_READ=0x01`, `FA_WRITE=0x02`, `FA_CREATE_ALWAYS=0x08`,
+  `FS_MAKEPATH=0x80` (crée les dossiers parents).
+- Lecture : `FRD` + taille totale ; données reçues par blocs de 4096 octets,
+  chaque bloc précédé d'un octet d'acquittement (0 = OK).
+- Écriture : `FWR` + taille ; données envoyées par blocs de 1024 avec
+  acquittement (`TxDataACK`), puis statut final.
+- `MakePath` crée les sous‑dossiers parents (`DIR_MK`), en ignorant l'erreur 8
+  (« dossier déjà existant »).
+
+Référence : `DeviceIO_V1.cs` (FileOpen/Read/Write/…).
+
+### Capture d'écran (menu)
+
+1. `FifoWR("*v")` → la carte répond par l'adresse de dump `rx32()` ;
+2. `MemRD(addr, 0x10000)` = VRAM, `MemRD(addr+0x10000, 1024)` = palette ;
+3. conversion VRAM/palette → image 320×224 → PNG (port de `DEV_TED/MenuImage.cs`).
+
+### Lancement d'un jeu
+
+1. `ResetToMenu` : `HostReset(ON)`, attente 10 ms, `ConfigReset` (écriture de
+   256 octets nuls à `0x01800000`), `HostReset(OFF)`, attente du statut `'r'`.
+2. `AppInstall` : `FifoWR("*i")`, chemin (`u16` longueur + chaîne), acquittement.
+3. `AppStart` : `FifoWR("*s")`.
+
+Référence : `DEV_TED/MenuCmd.cs`, `DEV_TED/DeviceIO.cs`, `DeviceCmd.AppDeploy`.
+
+## Adresses mémoire clés (Turbo EverDrive Pro)
+
+| Adresse | Rôle |
+|---|---|
+| `0x00000000` | RAM0 (8 Mo) — HuCard chargée |
+| `0x00800000` | RAM1 (8 Mo, Pro uniquement) |
+| `0x01800000` | Registre config |
+| `0x01810000` | FIFO hôte |
+
+## Ce qui est volontairement exclu (v1)
+
+- **`flard` / `flawr`** (flash système) et **`memwr`** (écriture HuCard) : hors
+  périmètre v1 (sécurité).
+- **RTC sur TED Pro** : la référence lève `UnsupportedCmd`
+  (`DEV_TED/DeviceIO.cs → RtcSet/RtcCal`) → non exposé.
+- **Listing de dossiers SD** : les commandes `CMD_F_DIR_*` existent dans le
+  protocole mais ne sont **pas câblées** par `edlink` → chemins explicites.
+
+## Tests
+
+```bash
+cargo test -p edlink-core
+```
+
+Les tests unitaires couvrent les conversions (dates/versions, endianness,
+chemins `sd:`). La validation du flux série se fait via le binaire `edlink-cli`
+(`devinf`, `probe`, …) lorsque le matériel est en état de répondre.

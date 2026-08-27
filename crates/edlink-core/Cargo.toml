@@ -1,0 +1,10 @@
+[package]
+name = "edlink-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Protocole de communication avec les cartouches EverDrive (Turbo EverDrive Pro) via port série USB - port Rust de la référence officielle edlink (MIT)"
+
+[dependencies]
+serialport = "4"
+png = "0.17"
