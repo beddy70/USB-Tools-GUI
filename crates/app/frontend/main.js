@@ -832,9 +832,18 @@ els.gameMatchInfo.addEventListener("mouseleave", () => {
 // — les prochaines recherches pour ce fichier retomberont directement dessus,
 // en confiance 100% (le nom mappé correspond alors exactement à un fichier
 // du dépôt, plus besoin de recherche approchée).
+// Nom de fichier dont la pochette vient d'être confirmée manuellement dans
+// la fiche actuellement ouverte : le fetch_game_media lancé à l'ouverture de
+// la fiche est déjà en vol au moment du clic (appel réseau), et sa réponse —
+// calculée AVANT la confirmation — arrive ensuite et écraserait sinon l'état
+// tout juste confirmé avec l'ancien résultat approché (bandeau qui semblait
+// « ne pas vouloir se refermer », alors que le mapping était bien enregistré).
+let confirmedEntryName = null;
+
 function confirmMatch(cached) {
   if (!gameModalTarget) return;
   const { entry } = gameModalTarget;
+  confirmedEntryName = entry.name;
   saveNameMapEntry(entry.name, cached.matchedTitle);
   cached.score = 1;
   boxartCache.set(entry.name, cached);
@@ -845,6 +854,7 @@ function confirmMatch(cached) {
 
 function openGameModal(entry, full) {
   gameModalTarget = { entry, full };
+  confirmedEntryName = null;
   els.gameTitle.textContent = entry.name;
   els.gameMeta.innerHTML =
     `<b>Taille</b> ${fmtSize(entry.size)}<br><b>Chemin</b> ${full}`;
@@ -866,7 +876,7 @@ function openGameModal(entry, full) {
 
   safeInvoke("fetch_game_media", { name: getMappedGameName(entry.name) }).then((media) => {
     if (!media || gameModalTarget?.entry !== entry) return; // fermé/changé entre-temps
-    if (media.boxart.png_base64) {
+    if (media.boxart.png_base64 && confirmedEntryName !== entry.name) {
       const found = {
         dataUri: "data:image/png;base64," + media.boxart.png_base64,
         matchedTitle: media.boxart.matched_title,
