@@ -16,6 +16,10 @@
     --na: var(--muted); --na-bg: rgba(154,148,196,0.10);
     --todo-bg: rgba(255,224,102,0.06); --todo-border: rgba(255,224,102,0.35);
     --mono: "SFMono-Regular", Menlo, Consolas, monospace;
+    /* Sans ça, le navigateur garde son chrome natif *clair* sur un fond sombre :
+       triangle de redimensionnement d'un <textarea>, ascenseurs par défaut,
+       icône du sélecteur <input type=date>… tous blancs/clairs et détonnants. */
+    color-scheme: dark;
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; color: var(--text);
@@ -139,6 +143,10 @@
     color: #fff; font-size: 12.5px; opacity: .85; font-family: var(--mono); }
 
   footer { text-align: center; color: var(--muted); font-size: 12px; padding: 24px 0 0; }
+
+  ::-webkit-scrollbar { width: 9px; height: 9px; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
 
   @media print {
     /* Le thème néon sombre est illisible/gourmand en encre imprimé : on repasse
