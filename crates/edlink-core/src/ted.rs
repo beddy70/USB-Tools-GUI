@@ -358,9 +358,29 @@ impl Ted {
         }
 
         let mut out = Vec::new();
+        let mut first = true;
         loop {
             self.link.tx_cmd(CMD_F_DIR_RD)?;
-            let status = self.link.rx8()?;
+            let status = match self.link.rx8() {
+                Ok(v) => v,
+                // Silence total dès la première trame CMD_F_DIR_RD, alors que
+                // CMD_F_DIR_OPN (juste avant, même carte, même session) a bien
+                // répondu : ce n'est pas un timeout « carte lente », c'est le
+                // signe que 0xC4 n'est pas traité comme on l'attend — soit
+                // l'opcode n'est pas implémenté séparément de DIR_OPN, soit il
+                // attend un argument qu'on n'envoie pas (voir docs/PROTOCOL.md,
+                // « points à confirmer »). Protocole reconstitué, jamais
+                // exercé par l'outil `edlink` de référence.
+                Err(EdError::Other(msg)) if first && msg.contains("renvoyé que 0/") => {
+                    return Err(EdError::Other(format!(
+                        "CMD_F_DIR_OPN a répondu mais CMD_F_DIR_RD reste muet : protocole de \
+                         listing reconstitué, probablement incomplet ou non supporté par le \
+                         firmware de cette carte — {msg}"
+                    )));
+                }
+                Err(e) => return Err(e),
+            };
+            first = false;
             if status != FR_OK {
                 return Err(EdError::DeviceError(status));
             }

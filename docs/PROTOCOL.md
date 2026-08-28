@@ -106,8 +106,29 @@ Les entrées `.` / `..` sont filtrées côté hôte.
 
 **Points à confirmer sur la vraie carte** (si `ls` échoue, la trace le montre) :
 1. `CMD_F_DIR_RD` prend‑il un argument (p. ex. `u16` longueur max de nom) ? Ici : **aucun**.
-2. `CMD_F_DIR_OPN` répond‑il par `CMD_STATUS` (hypothèse retenue) ou par un octet inline ?
-3. Ordre / tailles exacts des champs FILINFO (`size`/`date`/`time`/`attrib`/`name`).
+   → **suspect principal** : c'est cette commande précise qui reste muette (voir
+   ci‑dessus), alors que `CMD_F_DIR_OPN` juste avant répond correctement — il
+   manque très probablement un paramètre que le firmware attend avant de
+   traiter la commande (silence = il attend encore des octets côté RX, pas un
+   vrai timeout).
+2. ~~`CMD_F_DIR_OPN` répond‑il par `CMD_STATUS` (hypothèse retenue) ou par un
+   octet inline ?~~ **Confirmé par la trace du 2026‑08‑28** : c'est bien
+   `CMD_STATUS` séparé (comme `CMD_F_DIR_MK`) — cette partie fonctionne.
+3. Ordre / tailles exacts des champs FILINFO (`size`/`date`/`time`/`attrib`/`name`)
+   — toujours inconnu, `CMD_F_DIR_RD` ne répondant jamais assez pour les
+   observer.
+
+Recherche effectuée dans `reference/edlink` (dépôt C# officiel) le 2026‑08‑28 :
+aucune piste supplémentaire — `CMD_F_DIR_OPN`/`RD`/etc. sont *déclarés* dans
+`Device/DeviceIO_V1.cs` mais **jamais appelés**, dans aucune des 5 familles de
+cartes (`DEV_TED`, `DEV_MEGA`, `DEV_ED64`, `DEV_GBA`, `DEV_EDN8`) ; l'outil CLI
+officiel n'a d'ailleurs pas de commande `ls` du tout (seulement `cp`, qui
+reconstruit les chemins distants à partir de l'arborescence *locale*, sans
+jamais interroger la carte). Seul `CMD_F_DIR_MK` (créer un dossier, via
+`FS_MAKEPATH` à l'upload) est réellement exercé dans ce dépôt — et rien ne
+prouve qu'il ait déjà été testé sur cette carte non plus. Le format exact de
+`CMD_F_DIR_RD` n'a donc **aucune source de référence connue** ; la seule voie
+qui reste est une trace `EDLINK_TRACE` sur la vraie carte.
 
 ### Trace série (`EDLINK_TRACE`)
 
