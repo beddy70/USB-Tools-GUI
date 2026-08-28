@@ -840,20 +840,44 @@ els.gameMatchInfo.addEventListener("mouseleave", () => {
 // « ne pas vouloir se refermer », alors que le mapping était bien enregistré).
 let confirmedEntryName = null;
 
-function confirmMatch(cached) {
+// Enregistre l'association puis RELIT vraiment la base avec le nom désormais
+// mappé (comme le fait la roue crantée ⚙ de la mosaïque), au lieu de
+// supposer localement un score de 100% : la première variante essayée par
+// le backend est maintenant le nom exact confirmé, donc cette nouvelle
+// requête doit revenir en confiance 1.0 — c'est cette réponse réelle, pas
+// une mutation locale, qui referme le bandeau.
+async function confirmMatch(cached) {
   if (!gameModalTarget) return;
   const { entry } = gameModalTarget;
   confirmedEntryName = entry.name;
   saveNameMapEntry(entry.name, cached.matchedTitle);
-  cached.score = 1;
-  boxartCache.set(entry.name, cached);
+  boxartCache.delete(entry.name);
+
   if (gameMatchInfoTimer) { clearTimeout(gameMatchInfoTimer); gameMatchInfoTimer = null; }
   els.gameMatchInfo.hidden = true;
-  log(`✔ « ${entry.name} » associé à « ${cached.matchedTitle} » (mémorisé)`, "ok");
-  // Rafraîchit la mosaïque derrière la fiche : sans ça, le badge de
-  // pourcentage restait affiché sur la vignette (le cache mémoire de cette
-  // vignette précise n'était mis à jour qu'en cas de réouverture de la
-  // fiche). La fiche elle-même reste ouverte par-dessus (élément séparé).
+
+  const res = await safeInvoke("fetch_boxart", { name: getMappedGameName(entry.name) });
+  if (res && res.png_base64) {
+    const fresh = {
+      dataUri: "data:image/png;base64," + res.png_base64,
+      matchedTitle: res.matched_title,
+      score: res.score,
+    };
+    boxartCache.set(entry.name, fresh);
+    if (gameModalTarget && gameModalTarget.entry === entry) {
+      els.gameBoxart.src = fresh.dataUri;
+      els.gameBoxart.hidden = false;
+      els.gameBoxartPh.hidden = true;
+      showMatchInfo(fresh); // se cache tout seul si score >= 1
+    }
+    log(`✔ « ${entry.name} » associé à « ${fresh.matchedTitle} » ` +
+        `(${Math.round(fresh.score * 100)}%, mémorisé)`, "ok");
+  } else {
+    log(`⚠ Association enregistrée pour « ${entry.name} », mais la relecture a échoué.`, "err");
+  }
+
+  // Rafraîchit la mosaïque derrière la fiche (élément séparé, reste ouverte
+  // par-dessus) pour que sa vignette reflète elle aussi la confirmation.
   if (gamesLevel === "mosaic") renderGamesTab();
 }
 
