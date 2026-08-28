@@ -782,23 +782,65 @@ function startSnapSlideshow(images) {
 }
 
 let gameMatchInfoTimer = null;
+let currentMatchCached = null; // le dernier { dataUri, matchedTitle, score } affiché
+
+function scheduleMatchInfoHide() {
+  gameMatchInfoTimer = setTimeout(() => {
+    els.gameMatchInfo.hidden = true;
+    gameMatchInfoTimer = null;
+  }, 3000);
+}
 
 function showMatchInfo(cached) {
   if (gameMatchInfoTimer) { clearTimeout(gameMatchInfoTimer); gameMatchInfoTimer = null; }
+  currentMatchCached = cached;
   if (!cached || cached.score >= 1) {
     els.gameMatchInfo.hidden = true;
     return;
   }
   els.gameMatchInfo.hidden = false;
-  els.gameMatchInfo.textContent =
-    `⚠ Pochette approchée (${Math.round(cached.score * 100)}%) : « ${cached.matchedTitle} ». ` +
-    `Si ce n'est pas le bon jeu, corrigez via ⚙ dans la mosaïque.`;
+  els.gameMatchInfo.innerHTML = "";
+  const text = document.createElement("span");
+  text.textContent = `⚠ Pochette approchée (${Math.round(cached.score * 100)}%) : « ${cached.matchedTitle} ».`;
+  const confirmBtn = document.createElement("button");
+  confirmBtn.type = "button";
+  confirmBtn.className = "match-confirm-btn";
+  confirmBtn.textContent = "✓ C'est le bon jeu";
+  confirmBtn.title = "Mémoriser ce titre comme correspondance confirmée pour ce fichier";
+  confirmBtn.addEventListener("click", () => confirmMatch(cached));
+  els.gameMatchInfo.appendChild(text);
+  els.gameMatchInfo.appendChild(confirmBtn);
   // Correspondance non exacte : juste un avertissement, pas la peine qu'il
-  // reste affiché en permanence — s'efface tout seul.
-  gameMatchInfoTimer = setTimeout(() => {
-    els.gameMatchInfo.hidden = true;
-    gameMatchInfoTimer = null;
-  }, 3000);
+  // reste affiché en permanence — s'efface tout seul (sauf survol : le temps
+  // de lire et, éventuellement, cliquer « C'est le bon jeu »).
+  scheduleMatchInfoHide();
+}
+
+// Survoler le bandeau suspend l'auto-effacement, pour laisser le temps de
+// cliquer « C'est le bon jeu » sans qu'il disparaisse sous la souris.
+els.gameMatchInfo.addEventListener("mouseenter", () => {
+  if (gameMatchInfoTimer) { clearTimeout(gameMatchInfoTimer); gameMatchInfoTimer = null; }
+});
+els.gameMatchInfo.addEventListener("mouseleave", () => {
+  if (!els.gameMatchInfo.hidden && currentMatchCached && currentMatchCached.score < 1) {
+    scheduleMatchInfoHide();
+  }
+});
+
+// Valide la correspondance approchée trouvée : l'associe définitivement à ce
+// fichier (comme le ferait la roue crantée ⚙, mais sans ressaisir le titre)
+// — les prochaines recherches pour ce fichier retomberont directement dessus,
+// en confiance 100% (le nom mappé correspond alors exactement à un fichier
+// du dépôt, plus besoin de recherche approchée).
+function confirmMatch(cached) {
+  if (!gameModalTarget) return;
+  const { entry } = gameModalTarget;
+  saveNameMapEntry(entry.name, cached.matchedTitle);
+  cached.score = 1;
+  boxartCache.set(entry.name, cached);
+  if (gameMatchInfoTimer) { clearTimeout(gameMatchInfoTimer); gameMatchInfoTimer = null; }
+  els.gameMatchInfo.hidden = true;
+  log(`✔ « ${entry.name} » associé à « ${cached.matchedTitle} » (mémorisé)`, "ok");
 }
 
 function openGameModal(entry, full) {
