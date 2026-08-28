@@ -115,6 +115,10 @@
 
   .lightbox { position: fixed; inset: 0; background: rgba(0,0,0,.82); z-index: 50;
     display: flex; align-items: center; justify-content: center; padding: 30px; cursor: zoom-out; }
+  /* `[hidden]` et `.lightbox` ont la même spécificité ; sans cette règle,
+     `.lightbox { display: flex }` gagne (dernier déclaré) et la lightbox reste
+     affichée en permanence (fond sombre + icône d'image cassée, src vide). */
+  .lightbox[hidden] { display: none; }
   .lightbox img { max-width: 100%; max-height: 100%; border-radius: 8px; box-shadow: 0 10px 40px rgba(0,0,0,.5); }
   .lightbox .lightbox-caption { position: absolute; bottom: 18px; left: 0; right: 0; text-align: center;
     color: #fff; font-size: 12.5px; opacity: .85; font-family: var(--mono); }
