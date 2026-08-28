@@ -172,10 +172,16 @@ $env:EDLINK_TRACE = 1
    visualiseur mémoire, lui, affiche les octets bruts.
 
 `Ted::vram_dump()` renvoie `(vram, cram)` ; `Ted::screen_opts()` l'utilise.
+Confirmé identique par désassemblage IL de `turbolink.exe` (`DeviceIO.vramDump`,
+28/08/2026) : aucune divergence avec `MenuCmd.VramDump` de la référence.
 **Ne fonctionne que si le menu de la carte est affiché** : le VDC/VCE sont
 internes à la console (hors bus cartouche), seul du code PCE peut les lire —
 donc pas d'accès pendant un jeu. Contrairement à la RAM (`CMD_MEM_RD`), ce
-n'est pas un souci de gel : au menu, la console est au repos.
+n'est pas un souci de gel : au menu, la console est au repos. Symptôme si un
+jeu tourne : `*v` s'écrit sans erreur (simple écriture mémoire), mais le
+`rx32()` qui suit ne reçoit jamais rien — personne côté console ne lit la
+FIFO pour y répondre. `vram_dump()` détecte ce silence total et renvoie un
+message explicite plutôt que le timeout générique.
 
 La commande `capture_vram(refresh)` renvoie l'instantané en base64 (partagé avec
 la capture d'écran via `AppState.screen_snap`). Consommateurs :

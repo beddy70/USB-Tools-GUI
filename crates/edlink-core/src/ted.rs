@@ -538,10 +538,21 @@ impl Ted {
     /// de la RAM cartouche puis renvoie son adresse ; l'hôte lit ce tampon. Ne
     /// fonctionne que si **le menu de la carte est affiché** (le VDC/VCE sont
     /// internes à la console, hors du bus cartouche — pas de lecture directe
-    /// pendant un jeu). Port de `DEV_TED/MenuCmd.VramDump`.
+    /// pendant un jeu). Port de `DEV_TED/MenuCmd.VramDump`, confirmé identique
+    /// par désassemblage IL de `turbolink.exe` (`DeviceIO.vramDump`).
     pub fn vram_dump(&mut self) -> Result<(Vec<u8>, Vec<u8>)> {
         self.fifo_wr(b"*v")?;
-        let dump_addr = self.link.rx32()?;
+        // `*v` est une commande coopérative traitée par le menu (code PCE),
+        // pas par le microcontrôleur USB : si un jeu tourne au lieu du menu,
+        // personne ne lit la FIFO côté console et cette réponse n'arrive
+        // jamais — silence total, pas un vrai dépassement de délai matériel.
+        let dump_addr = self.link.rx32().map_err(|e| match e {
+            EdError::Other(msg) if msg.contains("renvoyé que 0/") => EdError::Other(format!(
+                "aucune réponse du menu de la carte à « *v » : affichez le menu de la carte \
+                 (pas pendant une partie en cours) puis réessayez — {msg}"
+            )),
+            other => other,
+        })?;
         let vram = self.mem_rd(dump_addr, 0x10000)?;
         let cram = self.mem_rd(dump_addr + 0x10000, 1024)?;
         Ok((vram, cram))
