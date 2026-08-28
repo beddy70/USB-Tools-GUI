@@ -30,6 +30,7 @@ carte — le tout relié à la cartouche par **USB série** (CDC).
 - [Build & lancement](#build--lancement)
 - [Utilisation](#utilisation)
 - [Vérification matérielle](#vérification-matérielle)
+- [Grille de test (QA)](#grille-de-test-qa)
 - [Limitations connues](#limitations-connues)
 - [Feuille de route](#feuille-de-route)
 - [Dépôt](#dépôt)
@@ -77,6 +78,7 @@ Turbo Everdrive USB Tools GUI/
 │       └── capabilities/
 ├── reference/edlink/          # source officielle krikzz/edlink (MIT) clonée
 ├── docs/                      # documentation détaillée
+│   └── qa-checklist.html      #   grille de test QA autonome (voir plus bas)
 └── scripts/gen_icon.py        # générateur d'icône
 ```
 
@@ -208,6 +210,26 @@ reçu (test `probe`), vérifiez :
 ./target/debug/edlink-cli --port /dev/cu.usbmodemXXXX probe
 ```
 
+## Grille de test (QA)
+
+[`docs/qa-checklist.html`](docs/qa-checklist.html) est un formulaire de
+validation **autonome** (fichier local, aucune dépendance, aucun réseau) à
+ouvrir dans un navigateur — pratique pour faire tester le build par quelqu'un
+sans Rust/Cargo installé (ex. un testeur Windows qui reçoit juste le zip).
+Reprend la palette « retrowave » de l'application.
+
+- Grille de tests par section (Connexion, Carte SD, Jouer, Mémoire, Sprites,
+  Général) : statut ☐ / ✅ / ❌ / ➖ + commentaire par ligne, barre de
+  progression sticky.
+- **📎 Capture d'écran par ligne** — redimensionnée (≤ 1400 px) et réencodée en
+  JPEG côté navigateur, aperçu en cliquant la vignette ; **💾 Télécharger en
+  .zip** regroupe toutes les captures jointes en un seul fichier (écrivain ZIP
+  maison, sans dépendance).
+- **📝 Générer le Markdown** produit un rapport prêt à coller dans un e-mail
+  (infos de test, résumé, tableau des résultats, notes, liste des captures).
+- Sauvegarde automatique dans le navigateur (`localStorage`) ; rien n'est
+  envoyé nulle part.
+
 ## Limitations connues
 
 - **Listing de dossiers SD reconstitué** : `CMD_F_DIR_OPN` / `CMD_F_DIR_RD` ne
@@ -233,7 +255,7 @@ reçu (test `probe`), vérifiez :
   interface réactive) + barre de progression ; visualiseur mémoire (RAM en mode
   conservateur sur matériel, VRAM/CRAM via `*v`) ; planche de tuiles VRAM
   (sprites) ; détection émulateur/matériel ; version de build injectée à la
-  compilation.
+  compilation ; grille de test QA autonome (`docs/qa-checklist.html`).
 - **M3** Sauvegarde/chargement de HuCard complète (via `memrd`/`memwr`), tests
   de vitesse USB (`usbspd`), diagnostics (`diag`).
 - **M4** Packager/icônes finales, intégration continue, validations multiplateforme.
