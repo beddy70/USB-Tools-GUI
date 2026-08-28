@@ -20,7 +20,7 @@ const els = {
   gamesExplorer: $("games-explorer"),
   gameModal: $("game-modal"), gameModalClose: $("game-modal-close"),
   gameBoxart: $("game-boxart"), gameBoxartPh: $("game-boxart-ph"),
-  gameTitle: $("game-title"), gameMeta: $("game-meta"),
+  gameTitle: $("game-title"), gameMeta: $("game-meta"), gameMatchInfo: $("game-match-info"),
   gameSnapWrap: $("game-snap-wrap"), gameSnap: $("game-snap"),
   gamePlay: $("game-play"), gameDownload: $("game-download"),
   romPath: $("rom-path"), screenCard: $("screen-card"), screenImg: $("screen-img"),
@@ -709,21 +709,41 @@ async function buildMosaic() {
 // pochettes qui disparaissaient en revisitant une catégorie déjà vue.
 let gamesRenderSeq = 0;
 
+// boxartCache : nom de fichier -> { dataUri, matchedTitle, score } (score 1.0
+// = variante de région connue, < 1.0 = correspondance approchée trouvée par
+// similarité de texte dans l'index du dépôt — cf. thumbnails.rs) ; `null` =
+// aucune pochette trouvée (mis en cache pour ne pas réessayer à chaque rendu).
 async function loadBoxartInto(romName, frame, seq) {
-  let dataUri = boxartCache.get(romName);
-  if (dataUri === undefined) {
+  let cached = boxartCache.get(romName);
+  if (cached === undefined) {
     const res = await safeInvoke("fetch_boxart", { name: getMappedGameName(romName) });
-    dataUri = res ? "data:image/png;base64," + res : null;
-    boxartCache.set(romName, dataUri);
+    cached = res && res.png_base64
+      ? { dataUri: "data:image/png;base64," + res.png_base64, matchedTitle: res.matched_title, score: res.score }
+      : null;
+    boxartCache.set(romName, cached);
   }
-  if (!dataUri || seq !== gamesRenderSeq) return; // mosaïque remplacée entre-temps
+  if (!cached || seq !== gamesRenderSeq) return; // mosaïque remplacée entre-temps
   const img = document.createElement("img");
-  img.src = dataUri;
+  img.src = cached.dataUri;
   img.alt = romName;
+  if (cached.score < 1) {
+    img.title = `Pochette approchée (${Math.round(cached.score * 100)}%) : ${cached.matchedTitle}`;
+  }
   frame.replaceChildren(img);
 }
 
 let gameModalTarget = null; // { entry, full }
+
+function showMatchInfo(cached) {
+  if (!cached || cached.score >= 1) {
+    els.gameMatchInfo.hidden = true;
+    return;
+  }
+  els.gameMatchInfo.hidden = false;
+  els.gameMatchInfo.textContent =
+    `⚠ Pochette approchée (${Math.round(cached.score * 100)}%) : « ${cached.matchedTitle} ». ` +
+    `Si ce n'est pas le bon jeu, corrigez via ⚙ dans la mosaïque.`;
+}
 
 function openGameModal(entry, full) {
   gameModalTarget = { entry, full };
@@ -733,24 +753,31 @@ function openGameModal(entry, full) {
   els.gameBoxart.hidden = true;
   els.gameBoxartPh.hidden = false;
   els.gameBoxartPh.textContent = "🎮";
+  els.gameMatchInfo.hidden = true;
   els.gameSnapWrap.hidden = true;
   els.gameModal.hidden = false;
 
   const cached = boxartCache.get(entry.name);
   if (cached) {
-    els.gameBoxart.src = cached;
+    els.gameBoxart.src = cached.dataUri;
     els.gameBoxart.hidden = false;
     els.gameBoxartPh.hidden = true;
+    showMatchInfo(cached);
   }
 
   safeInvoke("fetch_game_media", { name: getMappedGameName(entry.name) }).then((media) => {
     if (!media || gameModalTarget?.entry !== entry) return; // fermé/changé entre-temps
-    if (media.boxart_base64) {
-      const uri = "data:image/png;base64," + media.boxart_base64;
-      boxartCache.set(entry.name, uri);
-      els.gameBoxart.src = uri;
+    if (media.boxart.png_base64) {
+      const found = {
+        dataUri: "data:image/png;base64," + media.boxart.png_base64,
+        matchedTitle: media.boxart.matched_title,
+        score: media.boxart.score,
+      };
+      boxartCache.set(entry.name, found);
+      els.gameBoxart.src = found.dataUri;
       els.gameBoxart.hidden = false;
       els.gameBoxartPh.hidden = true;
+      showMatchInfo(found);
     }
     if (media.snap_base64) {
       els.gameSnap.src = "data:image/png;base64," + media.snap_base64;

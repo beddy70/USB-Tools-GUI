@@ -335,15 +335,39 @@ fn b64(bytes: &[u8]) -> String {
     base64::Engine::encode(&base64::engine::general_purpose::STANDARD, bytes)
 }
 
+/// Jaquette trouvée (ou non) pour un jeu, avec le titre exact utilisé dans
+/// Libretro Thumbnails et un score de confiance : `1.0` pour une variante de
+/// région connue, `< 1.0` (jamais en dessous du seuil interne) pour une
+/// correspondance trouvée par recherche approchée — voir `thumbnails.rs`.
+#[derive(Serialize)]
+struct BoxartResp {
+    png_base64: Option<String>,
+    matched_title: Option<String>,
+    score: Option<f64>,
+}
+
+impl From<Option<thumbnails::ThumbMatch>> for BoxartResp {
+    fn from(m: Option<thumbnails::ThumbMatch>) -> Self {
+        match m {
+            Some(m) => BoxartResp {
+                png_base64: Some(b64(&m.bytes)),
+                matched_title: Some(m.matched_title),
+                score: Some(m.score),
+            },
+            None => BoxartResp { png_base64: None, matched_title: None, score: None },
+        }
+    }
+}
+
 /// Jaquette d'un jeu de la carte SD via Libretro Thumbnails (voir
-/// `thumbnails.rs`) — `None` si aucune correspondance de nom trouvée. Utilisé
+/// `thumbnails.rs`) — champs `None` si aucune correspondance trouvée. Utilisé
 /// pour chaque vignette du carrousel : mise en cache disque après le premier
 /// essai (trouvé ou non), donc peu coûteux à ré-appeler.
 #[tauri::command]
-async fn fetch_boxart(app: tauri::AppHandle, name: String) -> Result<Option<String>, String> {
+async fn fetch_boxart(app: tauri::AppHandle, name: String) -> Result<BoxartResp, String> {
     let cache_dir = app.path().app_cache_dir().map_err(|e| e.to_string())?;
-    let bytes = thumbnails::fetch(&cache_dir, &base_name(&name), thumbnails::Kind::Boxart).await;
-    Ok(bytes.map(|b| b64(&b)))
+    let m = thumbnails::fetch(&cache_dir, &base_name(&name), thumbnails::Kind::Boxart).await;
+    Ok(m.into())
 }
 
 /// Média détaillé d'un jeu (jaquette + capture en jeu) pour la fiche du
@@ -351,7 +375,7 @@ async fn fetch_boxart(app: tauri::AppHandle, name: String) -> Result<Option<Stri
 /// pour chaque vignette.
 #[derive(Serialize)]
 struct GameMedia {
-    boxart_base64: Option<String>,
+    boxart: BoxartResp,
     snap_base64: Option<String>,
 }
 
@@ -362,8 +386,8 @@ async fn fetch_game_media(app: tauri::AppHandle, name: String) -> Result<GameMed
     let boxart = thumbnails::fetch(&cache_dir, &base, thumbnails::Kind::Boxart).await;
     let snap = thumbnails::fetch(&cache_dir, &base, thumbnails::Kind::Snap).await;
     Ok(GameMedia {
-        boxart_base64: boxart.map(|b| b64(&b)),
-        snap_base64: snap.map(|b| b64(&b)),
+        boxart: boxart.into(),
+        snap_base64: snap.map(|m| b64(&m.bytes)),
     })
 }
 

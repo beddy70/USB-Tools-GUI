@@ -249,14 +249,19 @@ Reprend la palette « retrowave » de l'application.
   lancements de l'appli, propre à la machine).
 - **Jaquettes** : correspondance par nom entre le fichier ROM
   (souvent en convention GoodTools/TOSEC, ex. « Jeu (U).pce ») et la base
-  Libretro (convention No-Intro, « Jeu (USA).png ») — best effort (quelques
-  substitutions de code région), pas garanti pour tous les jeux. Nécessite
-  une connexion Internet (requêtes HTTPS vers `raw.githubusercontent.com`
-  depuis le backend Rust, jamais depuis la carte/le port série) ; résultats
-  mis en cache localement (dossier cache de l'application) après le premier
-  essai, y compris les échecs, pour ne plus jamais retaper le réseau pour un
-  jeu déjà su sans jaquette. Pour corriger un jeu non trouvé : bouton ⚙ sur
-  sa vignette (mosaïque) pour associer manuellement le titre exact tel qu'il
+  Libretro (convention No-Intro, « Jeu (USA).png »), en deux temps : d'abord
+  quelques substitutions de code région connues (confiance 100%), puis en
+  repli une **recherche au plus proche** dans l'index complet du dépôt
+  (téléchargé une fois via l'API GitHub, mis en cache indéfiniment) —
+  correspondance acceptée à partir de 80% de similarité de texte ; en dessous,
+  ou par prudence, la fiche de détail affiche le titre trouvé et son score
+  quand ce n'est pas une variante exacte. Nécessite une connexion Internet
+  (requêtes HTTPS vers `raw.githubusercontent.com`/`api.github.com` depuis le
+  backend Rust, jamais depuis la carte/le port série) ; résultats mis en cache
+  localement (dossier cache de l'application) après le premier essai, y
+  compris les échecs, pour ne plus jamais retaper le réseau pour un jeu déjà
+  su sans jaquette. Pour corriger un jeu non trouvé ou mal trouvé : bouton ⚙
+  sur sa vignette (mosaïque) pour associer manuellement le titre exact tel qu'il
   apparaît dans Libretro Thumbnails — association mémorisée (stockage local).
 - **TED Pro non compatible RTC** via `edlink` (`RtcSet`/`RtcCal` lèvent
   `UnsupportedCmd`) : le RTC n'est pas exposé.
