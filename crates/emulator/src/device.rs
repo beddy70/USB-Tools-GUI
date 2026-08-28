@@ -131,10 +131,27 @@ impl Device {
     /// relance une session après chaque déconnexion (l'émulateur est un
     /// "serveur" persistant, comme une vraie carte qui reste branchée).
     pub fn run(&mut self, master: &mut PtyMaster) -> io::Result<()> {
+        // N'affiche « en attente d'une connexion » qu'une fois (pas à chaque
+        // relecture de la boucle, ~5×/s, tant que personne ne s'est jamais
+        // connecté) ; un « hôte déconnecté » n'est loggué que pour une vraie
+        // session ayant existé (au moins une commande traitée).
+        let mut printed_idle = false;
         loop {
             match self.run_once(master) {
-                Ok(()) => eprintln!("[emulator] hôte déconnecté, en attente de reconnexion..."),
-                Err(e) => eprintln!("[emulator] déconnexion ({e}), en attente de reconnexion..."),
+                Ok(true) => {
+                    eprintln!("[emulator] hôte déconnecté, en attente de reconnexion...");
+                    printed_idle = false;
+                }
+                Ok(false) => {
+                    if !printed_idle {
+                        eprintln!("[emulator] en attente d'une connexion...");
+                        printed_idle = true;
+                    }
+                }
+                Err(e) => {
+                    eprintln!("[emulator] déconnexion ({e}), en attente de reconnexion...");
+                    printed_idle = false;
+                }
             }
             self.reset_session();
             std::thread::sleep(std::time::Duration::from_millis(200));
@@ -154,11 +171,18 @@ impl Device {
     }
 
     /// Lit et traite les commandes d'un hôte jusqu'à sa déconnexion (EOF).
-    fn run_once(&mut self, master: &mut PtyMaster) -> io::Result<()> {
+    ///
+    /// Renvoie si au moins une commande a été traitée (une vraie session a eu
+    /// lieu) — sert à ne journaliser un « hôte déconnecté » que pour une
+    /// session ayant réellement existé, pas à chaque relecture de la boucle
+    /// de reconnexion (`run`) tant qu'aucun client ne s'est jamais connecté.
+    fn run_once(&mut self, master: &mut PtyMaster) -> io::Result<bool> {
+        let mut had_command = false;
         loop {
             let Some(code) = scan_command(master)? else {
-                return Ok(()); // hôte déconnecté (EOF)
+                return Ok(had_command); // hôte déconnecté (EOF)
             };
+            had_command = true;
             match code {
                 CMD_STATUS2 => {
                     println!("[cmd] STATUS2 (handshake)");
