@@ -16,8 +16,13 @@ reference/
 *.log
 /tmp/
 
-# Builds / binaires publiés
+# Builds / binaires publiés (dossiers de mise en forme temporaires — seules
+# les archives finales sous downloads/ sont suivies, voir l'exception plus bas)
 dist-windows/
+dist-macos-intel/
+dist-macos-arm/
+dist-linux-x64/
 edlink-app-windows-x64/
 *.zip
+!downloads/*.zip
 

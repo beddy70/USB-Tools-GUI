@@ -26,10 +26,27 @@ carte — le tout relié à la cartouche par **USB série** (CDC).
 > signale un arbre de travail modifié. Numéro unique : `version` dans
 > [`Cargo.toml`](Cargo.toml) (`[workspace.package]`).
 
+## Télécharger
+
+Builds prêts à l'emploi (pas de release GitHub à ce stade — archives suivies
+directement dans le dépôt sous [`downloads/`](downloads)) :
+
+| Plateforme | Archive | Contenu |
+|---|---|---|
+| Windows x64 | [`edlink-app-win64.zip`](downloads/edlink-app-win64.zip) | Interface graphique + CLI |
+| macOS Intel | [`edlink-app-macos-intel.zip`](downloads/edlink-app-macos-intel.zip) | Interface graphique + CLI + émulateur |
+| macOS Apple Silicon | [`edlink-app-macos-arm64.zip`](downloads/edlink-app-macos-arm64.zip) | Interface graphique + CLI + émulateur |
+| Linux x64 | [`edlink-tools-linux-x64.tar.gz`](downloads/edlink-tools-linux-x64.tar.gz) | CLI + émulateur seulement — l'interface graphique nécessite `webkit2gtk`/GTK3, indisponibles en cross-compilation depuis macOS (voir le `README.txt` de l'archive pour la construire vous-même sur Linux) |
+
+Chaque archive contient son propre `README.txt` avec les instructions
+d'installation (dont, sur macOS, comment lever le blocage Gatekeeper d'un
+binaire non signé) et [`GUIDE_UTILISATEUR.md`](docs/GUIDE_UTILISATEUR.md).
+
 ---
 
 ## Table des matières
 
+- [Télécharger](#télécharger)
 - [Fonctionnalités](#fonctionnalités)
 - [Architecture](#architecture)
 - [Prérequis](#prérequis)
@@ -251,6 +268,13 @@ Reprend la palette « retrowave » de l'application.
 
 ## Limitations connues
 
+- ⚠️ **Onglets Mémoire, Capture d'écran et Sprites : pas encore stables sur
+  matériel réel.** Ces trois fonctions lisent le bus/la mémoire vidéo de la
+  console pendant qu'elle tourne (voir plus haut) ; sur certaines cartes ou
+  configurations, ça peut **planter le jeu en cours** sur la console (retour
+  au menu, voire blocage nécessitant une réinitialisation). Utilisez-les avec
+  prudence pendant une partie en cours, et attendez-vous à devoir réinitialiser
+  la console de temps en temps.
 - **Listing de dossiers SD** : `CMD_F_DIR_OPN` / `CMD_F_DIR_RD` ne sont câblés
   ni par `edlink` ni par `turbolink.exe` (aucun outil officiel n'expose de
   `ls`). Protocole confirmé par désassemblage IL de `turbolink.exe` (bug
@@ -310,10 +334,7 @@ Reprend la palette « retrowave » de l'application.
 
 ## Dépôt
 
-Miroité sur deux serveurs (mêmes commits) :
-
-- `http://kiwinas:8418/eddy/USB-Tools-GUI.git` (`origin`)
-- `git@github.com:beddy70/USB-Tools-GUI.git` (`github`)
+- `git@github.com:beddy70/USB-Tools-GUI.git`
 
 ## Références
 

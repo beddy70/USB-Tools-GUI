@@ -151,6 +151,13 @@ ou pour revenir au menu de la carte).
 **Capturer l'écran** affiche une image du menu de la carte (pas d'un jeu en
 cours — voir [Dépannage](#dépannage)).
 
+> ⚠️ **Capture d'écran, onglet Mémoire et onglet Sprites ne sont pas encore
+> stables sur matériel réel** : ces fonctions lisent le bus ou la mémoire
+> vidéo de la console pendant qu'elle tourne, ce qui peut **planter le jeu
+> en cours** sur certaines cartes (retour au menu, voire blocage). Utilisez-
+> les avec prudence en pleine partie, et n'hésitez pas à réinitialiser la
+> console si besoin.
+
 ## Onglet Mémoire
 
 Visualiseur en lecture seule de la mémoire de la carte.
