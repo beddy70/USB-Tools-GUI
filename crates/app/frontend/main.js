@@ -1409,7 +1409,9 @@ $("save-screen").addEventListener("click", async () => {
     }
     vram = b64ToBytesLocal(res.vram_b64);
     cram = b64ToBytesLocal(res.cram_b64);
-    clearSelection();
+    // La géométrie (taille de cellule, colonnes) ne change pas avec une simple
+    // recapture : on garde la sélection pour pouvoir surveiller la même zone
+    // VRAM d'un instantané à l'autre (ex. une animation).
     refreshAll();
   }
 

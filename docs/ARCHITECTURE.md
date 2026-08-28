@@ -129,6 +129,16 @@ de l'en-tête `CMD_SYS_INF` (`Ted::is_emulator`). Côté frontend, `connect` app
 3. L'enregistrer dans `tauri::generate_handler![…]`.
 4. Appeler `invoke("nom_cmd", args)` depuis `frontend/main.js`.
 
+> ⚠️ **Piège des arguments multi-mots** : par défaut, Tauri attend les clés
+> d'arguments en **camelCase** côté JS (`fn pick_save(default_name: …)` →
+> `invoke("pick_save", { defaultName })`), même si tout le reste du projet
+> (champs de structs, valeurs de retour) reste en snake_case. Repéré tardivement
+> sur `pick_save`/`save_png` (erreur `missing required key defaultName`) — les
+> deux commandes portent `#[tauri::command(rename_all = "snake_case")]` pour
+> rester cohérentes avec le JS existant. Pour toute **nouvelle** commande avec
+> un paramètre multi-mots, ajoutez cette annotation dès le départ (ou passez la
+> clé en camelCase côté JS, mais snake_case est la convention du reste du code).
+
 ## Flux lors d'un « Lancer un jeu »
 
 ```

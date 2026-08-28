@@ -444,7 +444,12 @@ async fn memrd(app: tauri::AppHandle, addr: u32, len: usize) -> Result<MemDump, 
 }
 
 /// Enregistre un PNG (base64) vers un chemin local.
-#[tauri::command]
+///
+/// `rename_all = "snake_case"` : par défaut, Tauri attend des clés d'argument
+/// en camelCase côté JS (ex. `dataBase64`) — tout le reste du frontend envoie
+/// du snake_case (assorti aux noms de champs Rust), d'où cette annotation
+/// plutôt que de réécrire les appels JS.
+#[tauri::command(rename_all = "snake_case")]
 fn save_png(state: State<'_, AppState>, data_base64: String, path: String) -> Result<(), String> {
     let _ = state; // inutilisé
     let bytes = base64::Engine::decode(&base64::engine::general_purpose::STANDARD, data_base64)
@@ -463,7 +468,7 @@ fn pick_file() -> Result<Option<String>, String> {
 }
 
 /// Ouvre un sélecteur de destination de fichier.
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 fn pick_save(default_name: String) -> Result<Option<String>, String> {
     Ok(rfd::FileDialog::new()
         .set_file_name(&default_name)
