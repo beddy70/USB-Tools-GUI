@@ -45,7 +45,7 @@ carte — le tout relié à la cartouche par **USB série** (CDC).
 | **Connexion** | Détection automatique du port série de la carte (ou choix manuel) |
 | **Infos carte** (`devinf`) | Nom, n° de série, versions, compteurs, tensions |
 | **Carte SD** (onglet) | Explorateur ; envoi (glisser‑déposer) et téléchargement de fichiers via le protocole FatFs de la carte, avec barre de progression ; clic droit sur un fichier → menu contextuel (Jouer, Renommer, Télécharger, Effacer) |
-| **Vue « Jeux » par catégorie** (🎴, onglet Carte SD) | Navigateur en deux niveaux ancré sur un dossier de base configurable (défaut `sd:/GAMES`, persisté) : liste colorée des sous-dossiers (catégories, ex. Action/RPG/Plateforme) façon Recalbox, puis mosaïque des ROM de la catégorie avec jaquette [Libretro Thumbnails](https://github.com/libretro-thumbnails) (nécessite Internet, mise en cache locale) ; clic sur un jeu → fiche détaillée (taille, capture en jeu) avec « Jouer » et « Télécharger » |
+| **GAMES** (onglet 🕹️, sous Connexion) | Navigateur en deux niveaux ancré sur un dossier de base configurable (défaut `sd:/GAMES`, persisté) : liste colorée des sous-dossiers (catégories, ex. Action/RPG/Plateforme) façon Recalbox, puis mosaïque des ROM de la catégorie (fond repris de la couleur de la catégorie) avec jaquette [Libretro Thumbnails](https://github.com/libretro-thumbnails) (nécessite Internet, mise en cache locale) ; clic sur un jeu → fiche détaillée (taille, capture en jeu) avec « Jouer » et « Télécharger » |
 | **Lancer un jeu** (`run`) | Déploie la ROM sur la SD (`sd:/usb-games/`) puis la lance |
 | **Reset** | Réinitialise la console |
 | **Capture d'écran** | Capture le menu de la carte (VRAM + palette → PNG) |
