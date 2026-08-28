@@ -452,6 +452,34 @@ function saveGamesRoot(path) {
   try { localStorage.setItem(GAMES_ROOT_KEY, path); } catch { /* stockage indisponible : tant pis, valeur en mémoire seulement */ }
 }
 
+// Correspondance manuelle nom de ROM -> titre à chercher dans Libretro
+// Thumbnails, pour les jeux que la correspondance automatique (codes région
+// GoodTools/TOSEC -> No-Intro) ne trouve pas. Persistée comme le dossier de
+// jeux ; { "Jeu (U).pce": "Jeu Correct Title" } (titre SANS extension —
+// l'extension d'origine est réutilisée pour garder le bon dépôt TG16/SGX).
+const NAME_MAP_KEY = "edlink.thumbNameMap";
+
+function getNameMap() {
+  try { return JSON.parse(localStorage.getItem(NAME_MAP_KEY) || "{}"); }
+  catch { return {}; }
+}
+
+function saveNameMapEntry(romName, mappedTitle) {
+  const map = getNameMap();
+  if (mappedTitle) map[romName] = mappedTitle; else delete map[romName];
+  try { localStorage.setItem(NAME_MAP_KEY, JSON.stringify(map)); } catch { /* tant pis */ }
+}
+
+// Nom (avec extension) à envoyer à fetch_boxart/fetch_game_media : le titre
+// mappé s'il existe, sinon le nom de fichier brut.
+function getMappedGameName(romName) {
+  const map = getNameMap();
+  const mapped = map[romName];
+  if (!mapped) return romName;
+  const ext = romName.includes(".") ? romName.slice(romName.lastIndexOf(".")) : "";
+  return mapped + ext;
+}
+
 let gamesRoot = getGamesRoot();
 let gamesLevel = "categories"; // "categories" | "mosaic"
 let gamesCategory = null;
@@ -578,6 +606,7 @@ async function buildCategoryList() {
 }
 
 async function buildMosaic() {
+  const mySeq = ++gamesRenderSeq;
   const wrap = document.createElement("div");
   wrap.className = "mosaic-wrap";
   const [c1, c2] = gamesCategoryColors || CATEGORY_PALETTE[0];
@@ -633,12 +662,34 @@ async function buildMosaic() {
     label.textContent = entry.name;
     card.appendChild(frame);
     card.appendChild(label);
+
+    // Roue crantée : associer manuellement ce fichier à un titre présent
+    // dans Libretro Thumbnails, quand la correspondance automatique (codes
+    // région GoodTools/TOSEC -> No-Intro) ne trouve rien.
+    const mapBtn = document.createElement("button");
+    mapBtn.className = "mosaic-mapbtn"; mapBtn.textContent = "⚙";
+    mapBtn.title = "Associer ce jeu à un titre de la base de pochettes";
+    mapBtn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      const current = getNameMap()[entry.name] || entry.name.replace(/\.[^.]+$/, "");
+      const v = await askPrompt(
+        `Titre à chercher dans Libretro Thumbnails pour « ${entry.name} » ` +
+        `(sans extension, tel qu'il apparaît dans la base — laisser vide pour retirer l'association) :`,
+        current);
+      if (v === null) return;
+      saveNameMapEntry(entry.name, v.trim());
+      boxartCache.delete(entry.name); // reforcer une nouvelle recherche
+      frame.replaceChildren(Object.assign(document.createElement("div"), { className: "boxart-ph", textContent: "🎮" }));
+      loadBoxartInto(entry.name, frame, mySeq);
+    });
+    card.appendChild(mapBtn);
+
     card.addEventListener("click", () => openGameModal(entry, full));
     card.addEventListener("contextmenu", (e) => {
       e.preventDefault();
       openCtxMenu(e.clientX, e.clientY, entry, full);
     });
-    loadBoxartInto(entry.name, frame);
+    loadBoxartInto(entry.name, frame, mySeq);
     grid.appendChild(card);
   }
   wrap.appendChild(grid);
@@ -648,14 +699,24 @@ async function buildMosaic() {
 // Récupère la jaquette (cache mémoire -> commande Tauri, elle-même mise en
 // cache disque côté Rust) et l'insère dans `frame` si trouvée ; sinon laisse
 // le placeholder 🎮 en place.
-async function loadBoxartInto(romName, frame) {
+// Jeton de rendu de la mosaïque courante : incrémenté à chaque (re)construction
+// (buildMosaic) pour invalider les chargements en vol d'une mosaïque déjà
+// remplacée. Remplace un test `frame.isConnected`, qui échouait à tort sur
+// cache déjà chaud : le tableau de vignettes est construit puis rempli AVANT
+// d'être attaché au document (fetch_boxart en cours), donc `isConnected`
+// valait déjà `false` au moment du test — systématiquement en cas de cache
+// (aucun `await` traversé, tout s'exécute avant l'attache au DOM), d'où les
+// pochettes qui disparaissaient en revisitant une catégorie déjà vue.
+let gamesRenderSeq = 0;
+
+async function loadBoxartInto(romName, frame, seq) {
   let dataUri = boxartCache.get(romName);
   if (dataUri === undefined) {
-    const res = await safeInvoke("fetch_boxart", { name: romName });
+    const res = await safeInvoke("fetch_boxart", { name: getMappedGameName(romName) });
     dataUri = res ? "data:image/png;base64," + res : null;
     boxartCache.set(romName, dataUri);
   }
-  if (!dataUri || !frame.isConnected) return; // vue changée entre-temps
+  if (!dataUri || seq !== gamesRenderSeq) return; // mosaïque remplacée entre-temps
   const img = document.createElement("img");
   img.src = dataUri;
   img.alt = romName;
@@ -682,7 +743,7 @@ function openGameModal(entry, full) {
     els.gameBoxartPh.hidden = true;
   }
 
-  safeInvoke("fetch_game_media", { name: entry.name }).then((media) => {
+  safeInvoke("fetch_game_media", { name: getMappedGameName(entry.name) }).then((media) => {
     if (!media || gameModalTarget?.entry !== entry) return; // fermé/changé entre-temps
     if (media.boxart_base64) {
       const uri = "data:image/png;base64," + media.boxart_base64;

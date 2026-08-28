@@ -255,7 +255,9 @@ Reprend la palette « retrowave » de l'application.
   depuis le backend Rust, jamais depuis la carte/le port série) ; résultats
   mis en cache localement (dossier cache de l'application) après le premier
   essai, y compris les échecs, pour ne plus jamais retaper le réseau pour un
-  jeu déjà su sans jaquette.
+  jeu déjà su sans jaquette. Pour corriger un jeu non trouvé : bouton ⚙ sur
+  sa vignette (mosaïque) pour associer manuellement le titre exact tel qu'il
+  apparaît dans Libretro Thumbnails — association mémorisée (stockage local).
 - **TED Pro non compatible RTC** via `edlink` (`RtcSet`/`RtcCal` lèvent
   `UnsupportedCmd`) : le RTC n'est pas exposé.
 - **Lecture mémoire (`memrd`) = bus cartouche** : sur matériel réel, chaque

@@ -191,18 +191,19 @@ button.btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; box-s
 .games-actions { display: flex; align-items: center; gap: 8px; }
 .games-error { padding: 30px 16px; text-align: center; color: var(--muted); font-size: 13px; line-height: 1.7; }
 
-/* Catégories : une rangée colorée par dossier, gros texte stylé (~40px). */
-.cat-list { display: flex; flex-direction: column; gap: 12px; }
-.cat-row { display: flex; align-items: center; gap: 18px; padding: 18px 26px;
-  border-radius: 14px; cursor: pointer; min-height: 96px;
+/* Catégories : une rangée colorée par dossier, texte stylé (28px — réduit de
+   30% depuis 40px). */
+.cat-list { display: flex; flex-direction: column; gap: 9px; }
+.cat-row { display: flex; align-items: center; gap: 13px; padding: 13px 18px;
+  border-radius: 10px; cursor: pointer; min-height: 67px;
   box-shadow: 0 8px 24px rgba(0,0,0,0.35); transition: transform .15s, box-shadow .15s; }
 .cat-row:hover { transform: translateX(6px) scale(1.01); box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
-.cat-icon { font-size: 40px; line-height: 1; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.4)); }
+.cat-icon { font-size: 28px; line-height: 1; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.4)); }
 .cat-title { flex: 1; font-family: 'Bungee', 'Arial Black', 'Impact', sans-serif;
-  font-size: 40px; line-height: 1; color: #fff; letter-spacing: 1px;
+  font-size: 28px; line-height: 1; color: #fff; letter-spacing: 1px;
   text-shadow: 0 2px 0 rgba(0,0,0,0.25), 0 4px 14px rgba(0,0,0,0.35);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.cat-chev { font-size: 30px; color: rgba(255,255,255,0.75); }
+.cat-chev { font-size: 21px; color: rgba(255,255,255,0.75); }
 
 /* Mosaïque : grille de pochettes de la catégorie choisie. Le fond reprend le
    dégradé de la rangée de catégorie cliquée (posé en `style.background`
@@ -221,7 +222,12 @@ button.btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; box-s
 .mosaic-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
   gap: 18px; }
 .mosaic-card { display: flex; flex-direction: column; align-items: center; gap: 8px;
-  cursor: pointer; text-align: center; }
+  cursor: pointer; text-align: center; position: relative; }
+.mosaic-mapbtn { position: absolute; top: 6px; right: 6px; opacity: 0; z-index: 2;
+  background: rgba(0,0,0,0.55); border: 1px solid rgba(255,255,255,0.4); color: #fff;
+  border-radius: 6px; padding: 3px 7px; font-size: 12px; cursor: pointer; transition: all .15s; }
+.mosaic-card:hover .mosaic-mapbtn { opacity: 1; }
+.mosaic-mapbtn:hover { border-color: #fff; background: rgba(0,0,0,0.75); }
 .mosaic-frame { width: 100%; aspect-ratio: 1; border-radius: 12px; border: 1px solid rgba(255,255,255,0.25);
   background: var(--panel-2); display: flex; align-items: center; justify-content: center;
   overflow: hidden; transition: all .15s; box-shadow: 0 8px 22px rgba(0,0,0,0.4); }
