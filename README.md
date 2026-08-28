@@ -187,7 +187,9 @@ réinitialise son état par session. Commandes utiles :
    et son n° de pattern, ou **glissez** pour sélectionner une plage — l'export
    PNG n'enregistre alors que la zone choisie. « 🔒 Locker » recadre la vue sur
    cette seule sélection (le reste de la VRAM disparaît) : pratique pour
-   surveiller un même sprite au fil de « 🔄 Capturer » (ex. une animation).
+   surveiller un même sprite au fil de « 🔄 Capturer » (ex. une animation). La
+   sélection reste posée sur la **même zone VRAM** même en changeant la taille
+   de cellule ou le nombre de colonnes (recalculée dans la nouvelle grille).
    « ✕ Sélection » ou <kbd>Échap</kbd> efface tout et revient à la planche
    complète.
 

@@ -1180,9 +1180,16 @@ $("save-screen").addEventListener("click", async () => {
   let cram = null;         // Uint8Array(1024)
   let sheet = null;        // canvas natif (cols*cw × rows*ch)
   let geom = null;         // { spec, cw, ch, cols, rows, total, W, H, wordsPerCell }
-  let selA = null, selB = null; // coins (cx,cy) de la sélection (glisser) ; null = aucune
+  let selA = null, selB = null; // coins (cx,cy) de la sélection dans la grille courante
+  // Plages d'octets VRAM (absolues, indépendantes de la grille) couvertes par
+  // la sélection courante. Sert à la retrouver — même zone VRAM — après un
+  // changement de taille de cellule / colonnes (`reprojectSelectionFromLock`)
+  // ou un « 🔄 Capturer » : tant qu'on ne l'efface pas (« ✕ Sélection » /
+  // Échap), la sélection reste posée sur la même zone.
+  let lockedRanges = [];   // [[loByte, hiByte], …]
   let dragging = false;
-  let locked = false;      // true : la vue est recadrée sur la seule sélection
+  let locked = false;      // true : la vue (`paint`) est recadrée sur la seule
+                            // sélection — plus rien d'autre de la VRAM affiché.
   let capturing = false;
 
   // Les 6 tailles de sprite du VDC (16×16 à 32×64), + la tuile de fond 8×8.
@@ -1266,6 +1273,10 @@ $("save-screen").addEventListener("click", async () => {
     const lut = [];
     for (let i = 0; i < 16; i++) lut.push(palRGBA(pal, i));
 
+    // La planche décode toujours tout : c'est `paint()` qui recadre sur la
+    // seule sélection en vue verrouillée (`locked`). `lockedRanges` ne sert
+    // ici qu'à retrouver la même zone VRAM après un changement de grille
+    // (cf. reprojectSelectionFromLock).
     for (let c = 0; c < total; c++) {
       const ox = (c % cols) * cw, oy = Math.floor(c / cols) * ch;
       const base = spec.bg ? c * 32 : c * wordsPerCell; // octets (fond) ou mots (sprite)
@@ -1280,7 +1291,46 @@ $("save-screen").addEventListener("click", async () => {
       }
     }
     sctx.putImageData(img, 0, 0);
-    geom = { spec, cw, ch, cols, rows, total, W, H, wordsPerCell };
+    geom = { spec, cw, ch, cols, rows, total, W, H, wordsPerCell, bytesPerCell };
+  }
+
+  function cellByteRange(c) {
+    if (!geom) return [0, 0];
+    const lo = c * geom.bytesPerCell;
+    return [lo, lo + geom.bytesPerCell - 1];
+  }
+
+  // Recalcule `lockedRanges` (octets VRAM absolus) à partir de la sélection
+  // courante (grille actuelle) — une plage contiguë par ligne sélectionnée
+  // (les lignes ne sont pas forcément contiguës entre elles en VRAM).
+  function syncLockFromSelection() {
+    const r = selRect();
+    if (!r || !geom) { lockedRanges = []; return; }
+    lockedRanges = [];
+    for (let cy = r.y0; cy <= r.y1; cy++) {
+      const [lo] = cellByteRange(idxOf(r.x0, cy));
+      const [, hi] = cellByteRange(idxOf(r.x1, cy));
+      lockedRanges.push([lo, hi]);
+    }
+  }
+
+  // Après un changement de grille (taille de cellule / colonnes), recalcule le
+  // rectangle de sélection affiché (`selA`/`selB`) à partir des plages
+  // verrouillées : englobe toutes les cellules de la nouvelle grille qui
+  // recoupent une plage verrouillée.
+  function reprojectSelectionFromLock() {
+    if (!lockedRanges.length || !geom) { selA = null; selB = null; return; }
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (let c = 0; c < geom.total; c++) {
+      const [lo, hi] = cellByteRange(c);
+      if (!lockedRanges.some(([rlo, rhi]) => lo <= rhi && hi >= rlo)) continue;
+      const cx = c % geom.cols, cy = Math.floor(c / geom.cols);
+      if (cx < x0) x0 = cx; if (cx > x1) x1 = cx;
+      if (cy < y0) y0 = cy; if (cy > y1) y1 = cy;
+    }
+    if (x1 < 0) { selA = null; selB = null; return; }
+    selA = { cx: x0, cy: y0 };
+    selB = { cx: x1, cy: y1 };
   }
 
   function paint() {
@@ -1380,6 +1430,7 @@ $("save-screen").addEventListener("click", async () => {
 
   function clearSelection() {
     selA = null; selB = null;
+    lockedRanges = [];
     locked = false;
     updateLockUI();
     updateSelInfo();
@@ -1461,22 +1512,35 @@ $("save-screen").addEventListener("click", async () => {
   // partagé avec la capture d'écran quand il existe).
   openSpritesTab = () => { if (!vram) sprCapture(false); };
 
-  // Changer la taille de cellule ou le nombre de colonnes redéfinit la grille :
-  // une sélection en coordonnées de cellule n'aurait plus le même sens.
+  // Changer la taille de cellule ou le nombre de colonnes redéfinit la grille
+  // (coordonnées de cellule différentes). On ne perd pas la sélection pour
+  // autant : `reprojectSelectionFromLock` la retrouve dans la nouvelle grille
+  // à partir de la zone VRAM verrouillée (`lockedRanges`), qu'on soit en vue
+  // verrouillée ou simple sélection — « tant qu'on ne l'efface pas, ça reste
+  // sur la même zone ».
   [elCell, elCols].forEach((el) =>
-    el.addEventListener("input", () => { clearSelection(); refreshAll(); }));
+    el.addEventListener("input", () => {
+      buildSheet();
+      reprojectSelectionFromLock();
+      updateLockUI();
+      updateSelInfo();
+      updateStatus();
+      paint();
+    }));
   [elPal, elTransp].forEach((el) => el.addEventListener("input", refreshAll));
   [elZoom, elGrid].forEach((el) => el.addEventListener("input", paint));
 
-  // Clic = cellule unique ; glisser = plage rectangulaire (limitera l'export PNG).
-  // Désactivé en vue verrouillée (les coordonnées du canvas ne correspondent
-  // plus à la grille entière) — déverrouillez d'abord pour changer la sélection.
+  // Clic = cellule unique ; glisser = plage rectangulaire (limitera l'export PNG
+  // et pourra être verrouillée). Désactivé en vue verrouillée (les coordonnées
+  // du canvas ne correspondent plus à la grille entière) — déverrouillez
+  // d'abord pour changer la sélection.
   cv.addEventListener("mousedown", (e) => {
     if (locked) return;
     const c = cellAt(e.clientX, e.clientY);
     if (!c) return;
     dragging = true;
     selA = c; selB = c;
+    syncLockFromSelection();
     updateSelInfo();
     updateLockUI();
     paint();
@@ -1486,6 +1550,7 @@ $("save-screen").addEventListener("click", async () => {
     const c = cellAt(e.clientX, e.clientY);
     if (!c) return;
     selB = c;
+    syncLockFromSelection();
     updateSelInfo();
     updateLockUI();
     paint();
