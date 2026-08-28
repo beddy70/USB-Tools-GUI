@@ -8,6 +8,12 @@ Il permet de gérer les fichiers sur la carte SD, de lancer des ROMs, de
 réinitialiser la console, de capturer l'écran du menu et de lire l'état de la
 carte — le tout relié à la cartouche par **USB série** (CDC).
 
+<p align="center">
+  <img src="images/IMG_3311.png" width="266" alt="Onglet GAMES — liste des catégories (style Recalbox)" />
+  <img src="images/IMG_5546.png" width="266" alt="Onglet GAMES — mosaïque de pochettes d'une catégorie" />
+  <img src="images/IMG_9782.png" width="266" alt="Fiche de détail d'un jeu, avec capture en jeu" />
+</p>
+
 > ⚠️ **Version 0.1.1‑alpha — état : M2.** Protocole, interface graphique, listing
 > SD, transferts asynchrones avec barre de progression et visualiseur mémoire
 > sont implémentés. La validation sur matériel requiert que le **menu OS** de la
