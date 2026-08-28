@@ -1351,7 +1351,6 @@ $("save-screen").addEventListener("click", async () => {
     }
     const z = +elZoom.value;
     elZoomVal.textContent = z + "×";
-    ctx.imageSmoothingEnabled = false;
     const r = selRect();
 
     // Vue verrouillée : la planche disparaît, seule la sélection est recadrée
@@ -1359,7 +1358,10 @@ $("save-screen").addEventListener("click", async () => {
     if (locked && r) {
       const wCells = r.x1 - r.x0 + 1, hCells = r.y1 - r.y0 + 1;
       const sw = wCells * geom.cw, sh = hCells * geom.ch;
+      // Redimensionner le canvas réinitialise tout son contexte (dont
+      // imageSmoothingEnabled) : le repositionner après, pas avant.
       cv.width = sw * z; cv.height = sh * z;
+      ctx.imageSmoothingEnabled = false;
       ctx.clearRect(0, 0, cv.width, cv.height);
       ctx.drawImage(sheet, r.x0 * geom.cw, r.y0 * geom.ch, sw, sh, 0, 0, cv.width, cv.height);
       if (elGrid.checked && z >= 2) {
@@ -1376,6 +1378,7 @@ $("save-screen").addEventListener("click", async () => {
 
     cv.width = geom.W * z;
     cv.height = geom.H * z;
+    ctx.imageSmoothingEnabled = false;
     ctx.clearRect(0, 0, cv.width, cv.height);
     ctx.drawImage(sheet, 0, 0, cv.width, cv.height);
 
