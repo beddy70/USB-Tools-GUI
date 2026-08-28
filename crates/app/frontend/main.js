@@ -464,6 +464,7 @@ function saveGamesRoot(path) {
 let gamesRoot = getGamesRoot();
 let gamesLevel = "categories"; // "categories" | "mosaic"
 let gamesCategory = null;
+let gamesCategoryColors = null; // [c1, c2] — même dégradé que la rangée cliquée
 
 // Palette « très Recalbox » : chaque catégorie prend une couleur du cycle
 // (dégradé), indépendamment de son contenu — juste pour que la liste soit
@@ -569,6 +570,7 @@ async function buildCategoryList() {
     row.appendChild(chev);
     row.addEventListener("click", () => {
       gamesCategory = entry.name;
+      gamesCategoryColors = [c1, c2];
       gamesLevel = "mosaic";
       renderExplorer();
     });
@@ -579,6 +581,9 @@ async function buildCategoryList() {
 
 async function buildMosaic() {
   const wrap = document.createElement("div");
+  wrap.className = "mosaic-wrap";
+  const [c1, c2] = gamesCategoryColors || CATEGORY_PALETTE[0];
+  wrap.style.background = `linear-gradient(160deg, ${c1}, ${c2})`;
 
   const header = document.createElement("div");
   header.className = "mosaic-header";

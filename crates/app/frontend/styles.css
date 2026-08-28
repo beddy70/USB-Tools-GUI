@@ -203,24 +203,34 @@ button.btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; box-s
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cat-chev { font-size: 30px; color: rgba(255,255,255,0.75); }
 
-/* Mosaïque : grille de pochettes de la catégorie choisie. */
-.mosaic-header { display: flex; align-items: center; gap: 16px; margin-bottom: 6px; }
+/* Mosaïque : grille de pochettes de la catégorie choisie. Le fond reprend le
+   dégradé de la rangée de catégorie cliquée (posé en `style.background`
+   inline par buildMosaic — voir main.js), d'où les couleurs de texte/bouton
+   ci-dessous pensées pour rester lisibles sur un fond vif, pas sombre. */
+.mosaic-wrap { border-radius: 16px; padding: 20px; }
+.mosaic-header { display: flex; align-items: center; gap: 16px; margin-bottom: 10px; }
+.mosaic-header .btn.ghost { background: rgba(0,0,0,0.28); border-color: rgba(255,255,255,0.4);
+  color: #fff; }
+.mosaic-header .btn.ghost:hover { background: rgba(0,0,0,0.4); border-color: #fff; color: #fff; }
 .mosaic-title { font-family: 'Bungee', 'Arial Black', 'Impact', sans-serif;
-  font-size: 26px; color: var(--cyan); letter-spacing: 0.5px; text-transform: uppercase; }
-.mosaic-status { color: var(--muted); font-size: 12.5px; margin-bottom: 14px; }
+  font-size: 26px; color: #fff; letter-spacing: 0.5px; text-transform: uppercase;
+  text-shadow: 0 2px 0 rgba(0,0,0,0.25), 0 4px 14px rgba(0,0,0,0.35); }
+.mosaic-status { color: rgba(255,255,255,0.85); font-size: 12.5px; margin-bottom: 14px;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.3); }
 .mosaic-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
   gap: 18px; }
 .mosaic-card { display: flex; flex-direction: column; align-items: center; gap: 8px;
   cursor: pointer; text-align: center; }
-.mosaic-frame { width: 100%; aspect-ratio: 1; border-radius: 12px; border: 1px solid var(--border);
+.mosaic-frame { width: 100%; aspect-ratio: 1; border-radius: 12px; border: 1px solid rgba(255,255,255,0.25);
   background: var(--panel-2); display: flex; align-items: center; justify-content: center;
-  overflow: hidden; transition: all .15s; box-shadow: 0 6px 18px rgba(0,0,0,0.3); }
+  overflow: hidden; transition: all .15s; box-shadow: 0 8px 22px rgba(0,0,0,0.4); }
 .mosaic-frame .boxart-ph { font-size: 36px; opacity: 0.35; }
 .mosaic-frame img { width: 100%; height: 100%; object-fit: contain; }
-.mosaic-card:hover .mosaic-frame { border-color: var(--cyan); transform: translateY(-3px);
-  box-shadow: 0 10px 26px rgba(34,224,255,0.25); }
-.mosaic-label { font-size: 12px; color: var(--text); max-width: 100%;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mosaic-card:hover .mosaic-frame { border-color: #fff; transform: translateY(-3px);
+  box-shadow: 0 12px 28px rgba(0,0,0,0.5); }
+.mosaic-label { font-size: 12px; color: #fff; max-width: 100%; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; text-shadow: 0 1px 3px rgba(0,0,0,0.4); }
+.mosaic-wrap .games-error { color: rgba(255,255,255,0.9); text-shadow: 0 1px 3px rgba(0,0,0,0.3); }
 
 /* Fiche de détail (modale) */
 .modal-box.game-box { max-width: 640px; width: 90vw; position: relative; }
