@@ -92,6 +92,33 @@
   .copied-flag { font-size: 12.5px; color: var(--ok); opacity: 0; transition: opacity .2s; }
   .copied-flag.show { opacity: 1; }
 
+  /* ---- captures d'écran par ligne ---- */
+  .col-shot { width: 78px; text-align: center; }
+  .shot-btn { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px;
+    border-radius: 7px; border: 1px dashed var(--border); background: var(--bg); color: var(--muted);
+    cursor: pointer; font-size: 14px; }
+  .shot-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .shot-thumb-wrap { position: relative; display: inline-block; }
+  .shot-thumb { width: 40px; height: 40px; object-fit: cover; border-radius: 7px; border: 1px solid var(--border);
+    cursor: zoom-in; display: block; }
+  .shot-remove { position: absolute; top: -7px; right: -7px; width: 18px; height: 18px; border-radius: 50%;
+    background: var(--bad); color: #fff; border: none; font-size: 11px; line-height: 1; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; padding: 0; }
+  .shot-name { display: none; }
+
+  .shots-card { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .shots-card p { margin: 0; font-size: 12.5px; color: var(--muted); max-width: 560px; }
+  .shots-card .count { color: var(--text); font-weight: 700; }
+
+  .storage-warn { background: var(--bad-bg); border: 1px solid var(--bad); color: var(--bad);
+    border-radius: 9px; padding: 9px 13px; font-size: 12.5px; margin-bottom: 16px; }
+
+  .lightbox { position: fixed; inset: 0; background: rgba(0,0,0,.82); z-index: 50;
+    display: flex; align-items: center; justify-content: center; padding: 30px; cursor: zoom-out; }
+  .lightbox img { max-width: 100%; max-height: 100%; border-radius: 8px; box-shadow: 0 10px 40px rgba(0,0,0,.5); }
+  .lightbox .lightbox-caption { position: absolute; bottom: 18px; left: 0; right: 0; text-align: center;
+    color: #fff; font-size: 12.5px; opacity: .85; font-family: var(--mono); }
+
   footer { text-align: center; color: var(--muted); font-size: 12px; padding: 24px 0 0; }
 
   @media print {
@@ -121,6 +148,23 @@
 </div>
 
 <div class="wrap">
+
+  <div class="storage-warn" id="storageWarn" hidden>
+    ⚠️ Stockage local plein : les captures jointes risquent de ne pas être
+    conservées après fermeture de la page (le reste du formulaire, oui).
+    Générez le Markdown et téléchargez vos captures dès que possible.
+  </div>
+
+  <div class="card shots-card">
+    <p>
+      📎 Joignez une capture d'écran à une ligne (bouton dans la colonne
+      « Capture ») pour illustrer un problème. Les images ne sont pas
+      envoyées nulle part — elles restent dans ce navigateur ; téléchargez-les
+      pour les joindre à votre e-mail, à côté du texte Markdown collé.
+      <span class="count" id="shotsCount">0 capture(s) jointe(s)</span>
+    </p>
+    <button id="btnDownloadShots" disabled>💾 Télécharger les captures</button>
+  </div>
 
   <div class="card">
     <h2>Informations de test</h2>
@@ -161,6 +205,7 @@
           <th class="col-status">Validé</th>
           <th>Fonction</th>
           <th class="col-comment">Commentaire</th>
+          <th class="col-shot">Capture</th>
         </tr>
       </thead>
       <tbody id="rowsBody"></tbody>
@@ -183,6 +228,11 @@
   </div>
 
   <footer>Fichier local — aucune donnée n'est envoyée nulle part. Sauvegarde automatique dans ce navigateur.</footer>
+</div>
+
+<div class="lightbox" id="lightbox" hidden>
+  <img id="lightboxImg" alt="Capture" />
+  <div class="lightbox-caption" id="lightboxCaption"></div>
 </div>
 
 <script>
@@ -266,7 +316,15 @@
     } catch (_) { /* stockage indisponible : on continue sans persistance */ }
   }
   function saveState() {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (_) {}
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      $("storageWarn").hidden = true;
+    } catch (_) {
+      // Quota dépassé (typiquement à cause des captures jointes) : le
+      // formulaire continue de fonctionner pour la session en cours, mais la
+      // persistance entre deux ouvertures de la page n'est plus garantie.
+      $("storageWarn").hidden = false;
+    }
   }
 
   // ---------------------------------------------------------------- DOM
@@ -281,7 +339,7 @@
         lastCat = t.cat;
         const tr = document.createElement("tr");
         const td = document.createElement("td");
-        td.colSpan = 3;
+        td.colSpan = 4;
         td.style.cssText = "padding-top:16px;padding-bottom:2px;border-bottom:none;font-size:11.5px;" +
           "text-transform:uppercase;letter-spacing:.5px;color:var(--accent);font-weight:700;";
         td.textContent = SECTIONS[t.cat] || t.cat;
@@ -289,7 +347,9 @@
         rowsBody.appendChild(tr);
       }
 
-      const r = state.rows[t.id] || (state.rows[t.id] = { status: "", comment: "" });
+      const r = state.rows[t.id] || (state.rows[t.id] = { status: "", comment: "", image: null, imageName: null });
+      if (r.image === undefined) r.image = null;
+      if (r.imageName === undefined) r.imageName = null;
       const tr = document.createElement("tr");
       tr.dataset.id = t.id;
 
@@ -332,13 +392,151 @@
       inp.addEventListener("input", () => { r.comment = inp.value; saveState(); });
       tdComment.appendChild(inp);
 
+      const tdShot = document.createElement("td");
+      tdShot.className = "col-shot";
+      renderShotCell(tdShot, t, r);
+
       tr.appendChild(tdStatus);
       tr.appendChild(tdFn);
       tr.appendChild(tdComment);
+      tr.appendChild(tdShot);
       applyRowClass(tr, r.status);
       rowsBody.appendChild(tr);
     }
   }
+
+  // ---------------------------------------------------------------- captures d'écran
+  // Redimensionne l'image (max 1400px de côté) et la réencode en JPEG : garde
+  // le stockage local raisonnable même avec plusieurs captures jointes.
+  function loadImageResized(file, maxDim = 1400, quality = 0.85) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const img = new Image();
+        img.onload = () => {
+          let w = img.naturalWidth, h = img.naturalHeight;
+          if (w > maxDim || h > maxDim) {
+            const scale = maxDim / Math.max(w, h);
+            w = Math.round(w * scale); h = Math.round(h * scale);
+          }
+          const c = document.createElement("canvas");
+          c.width = w; c.height = h;
+          c.getContext("2d").drawImage(img, 0, 0, w, h);
+          resolve(c.toDataURL("image/jpeg", quality));
+        };
+        img.onerror = () => reject(new Error("image illisible"));
+        img.src = reader.result;
+      };
+      reader.onerror = () => reject(new Error("lecture du fichier impossible"));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function slugify(s) {
+    return (s || "")
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")
+      .slice(0, 60);
+  }
+
+  function suggestedFilename(t) {
+    const idx = TESTS.findIndex((x) => x.id === t.id);
+    return `t${String(idx + 1).padStart(2, "0")}-${t.cat}-${slugify(t.label)}.jpg`;
+  }
+
+  function renderShotCell(td, t, r) {
+    td.innerHTML = "";
+    if (r.image) {
+      const wrap = document.createElement("span");
+      wrap.className = "shot-thumb-wrap";
+      const img = document.createElement("img");
+      img.className = "shot-thumb";
+      img.src = r.image;
+      img.title = "Cliquer pour agrandir";
+      img.addEventListener("click", () => openLightbox(r.image, r.imageName || suggestedFilename(t)));
+      const rm = document.createElement("button");
+      rm.type = "button";
+      rm.className = "shot-remove";
+      rm.title = "Retirer la capture";
+      rm.textContent = "✕";
+      rm.addEventListener("click", () => {
+        r.image = null; r.imageName = null;
+        renderShotCell(td, t, r);
+        saveState();
+        updateShotsSummary();
+      });
+      wrap.appendChild(img);
+      wrap.appendChild(rm);
+      td.appendChild(wrap);
+    } else {
+      const label = document.createElement("label");
+      label.className = "shot-btn";
+      label.title = "Joindre une capture d'écran";
+      // Icône dans son propre nœud : muter son texte pendant le chargement ne
+      // doit pas emporter l'<input> imbriqué (label.textContent l'aurait fait).
+      const icon = document.createElement("span");
+      icon.textContent = "📎";
+      const input = document.createElement("input");
+      input.type = "file";
+      input.accept = "image/*";
+      input.style.display = "none";
+      input.addEventListener("change", async () => {
+        const file = input.files && input.files[0];
+        input.value = "";
+        if (!file) return;
+        icon.textContent = "…";
+        try {
+          r.image = await loadImageResized(file);
+          r.imageName = suggestedFilename(t);
+        } catch (e) {
+          alert("Impossible de charger cette image : " + e.message);
+          icon.textContent = "📎";
+          return;
+        }
+        renderShotCell(td, t, r);
+        saveState();
+        updateShotsSummary();
+      });
+      label.appendChild(icon);
+      label.appendChild(input);
+      td.appendChild(label);
+    }
+  }
+
+  function allShotRows() {
+    return TESTS.filter((t) => state.rows[t.id] && state.rows[t.id].image);
+  }
+
+  function updateShotsSummary() {
+    const rows = allShotRows();
+    $("shotsCount").textContent = `${rows.length} capture(s) jointe(s)`;
+    $("btnDownloadShots").disabled = rows.length === 0;
+  }
+
+  function openLightbox(src, caption) {
+    $("lightboxImg").src = src;
+    $("lightboxCaption").textContent = caption || "";
+    $("lightbox").hidden = false;
+  }
+  $("lightbox").addEventListener("click", () => { $("lightbox").hidden = true; });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !$("lightbox").hidden) $("lightbox").hidden = true;
+  });
+
+  $("btnDownloadShots").addEventListener("click", () => {
+    const rows = allShotRows();
+    rows.forEach((t, i) => {
+      const r = state.rows[t.id];
+      setTimeout(() => {
+        const a = document.createElement("a");
+        a.href = r.image;
+        a.download = r.imageName || suggestedFilename(t);
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      }, i * 250);
+    });
+  });
 
   function applyRowClass(tr, status) {
     tr.classList.remove("row-ok", "row-bad", "row-na");
@@ -410,16 +608,33 @@
       const s = (state.rows[t.id] && state.rows[t.id].status) || "";
       if (s === "ok") ok++; else if (s === "bad") bad++; else if (s === "na") na++; else todo++;
     }
-    lines.push(`**Résumé :** ${ok}/${TESTS.length} OK · ${bad} problème(s) · ${na} N/A · ${todo} non testé(s)`);
+    const shots = allShotRows();
+    lines.push(`**Résumé :** ${ok}/${TESTS.length} OK · ${bad} problème(s) · ${na} N/A · ${todo} non testé(s)` +
+      (shots.length ? ` · ${shots.length} capture(s) jointe(s) (voir pièces jointes de l'e-mail)` : ""));
     lines.push("");
     lines.push("| Validé | Test | Fonction | Commentaire |");
     lines.push("|---|---|---|---|");
     for (const t of TESTS) {
       const r = state.rows[t.id] || { status: "", comment: "" };
       const mark = STATUS_MARK[r.status] + (r.status ? ` ${STATUS_WORD[r.status]}` : "");
-      lines.push(`| ${mark} | ${SECTIONS[t.cat] || t.cat} | ${escapeCell(t.label)} | ${escapeCell(r.comment)} |`);
+      let comment = escapeCell(r.comment);
+      if (r.image) {
+        const note = `📎 capture jointe : \`${r.imageName}\``;
+        comment = comment ? `${comment} — ${note}` : note;
+      }
+      lines.push(`| ${mark} | ${SECTIONS[t.cat] || t.cat} | ${escapeCell(t.label)} | ${comment} |`);
     }
     lines.push("");
+    if (shots.length) {
+      lines.push("## Captures jointes");
+      lines.push("");
+      lines.push("_Fichiers téléchargés séparément (bouton « 💾 Télécharger les captures ») — à joindre à l'e-mail :_");
+      lines.push("");
+      for (const t of shots) {
+        lines.push(`- \`${state.rows[t.id].imageName}\` — ${SECTIONS[t.cat] || t.cat} : ${escapeCell(t.label)}`);
+      }
+      lines.push("");
+    }
     lines.push("## Notes générales");
     lines.push("");
     lines.push(state.notes && state.notes.trim() ? state.notes.trim() : "_(aucune)_");
@@ -481,6 +696,7 @@
   buildRows();
   initMeta();
   updateProgress();
+  updateShotsSummary();
 })();
 </script>
 </body>
