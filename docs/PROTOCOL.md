@@ -52,8 +52,8 @@ Référence : `Link.cs → GetDeviceConfig()` / `GetID()`.
 | `CMD_F_FCLOSE` | 0xCE | Fermeture fichier | `DeviceIO_V1.FileClose` |
 | `CMD_F_AVB` | 0xD5 | Taille fichier | `DeviceIO_V1.FileAvailable` |
 | `CMD_F_DIR_MK` | 0xD2 | Créer dossier | `DeviceIO_V1.DirMake` |
-| `CMD_F_DIR_OPN` | 0xC3 | Ouvrir dossier | *(non câblé par edlink — cf. ci‑dessous)* |
-| `CMD_F_DIR_RD` | 0xC4 | Lire une entrée | *(non câblé par edlink — cf. ci‑dessous)* |
+| `CMD_F_DIR_OPN` | 0xC3 | Ouvrir dossier | `turbolink.exe DeviceIO.dirOpen` (cf. ci‑dessous) |
+| `CMD_F_DIR_RD` | 0xC4 | Lire une entrée | `turbolink.exe DeviceIO.dirRead` (cf. ci‑dessous) |
 
 ### Système de fichiers SD (FatFs-like)
 
@@ -71,64 +71,65 @@ Référence : `DeviceIO_V1.cs` (FileOpen/Read/Write/…).
 
 ### Listing de dossiers SD (`CMD_F_DIR_OPN` / `CMD_F_DIR_RD`)
 
-> ⚠️ **Reconstitué, non issu de l'`edlink` de référence — confirmé erroné sur
-> matériel réel.** Les commandes `CMD_F_DIR_*` sont *déclarées* dans
-> `DeviceIO_V1.cs` mais **jamais appelées** (aucune carte n'expose de
-> navigation SD via edlink). L'implémentation ci‑dessous reproduit la couche FS
-> (`f_opendir` / `f_readdir`) du firmware MCU partagé des cartes « Pro », mais
-> une session de test sur une vraie Turbo EverDrive Pro (2026‑08‑28) montre que
-> `CMD_F_DIR_RD` ne répond pas (timeout total, 0 octet reçu, alors que
-> `CMD_F_DIR_OPN` + `CMD_STATUS` passent). Au moins une des hypothèses
-> ci‑dessous est donc fausse. **Prochaine étape : capturer une trace
-> `EDLINK_TRACE` sur cette carte** (voir plus bas) pour corriger le protocole
-> avec des données réelles plutôt que deviner davantage.
+> ✅ **Confirmé le 28/08/2026 par désassemblage IL de `turbolink.exe` v1.0.0.3**
+> (l'outil CLI propre à la Turbo EverDrive, distinct du `edlink` générique de
+> `reference/edlink`). Ni l'un ni l'autre outil n'expose de commande `ls` côté
+> CLI, mais `turbolink.exe` contient malgré tout les méthodes complètes
+> `DeviceIO.dirOpen`/`dirRead`/`rxFileInfo`, écrites avec les mêmes primitives
+> (`txCMD`/`rx8`/`rx16`/`rx32`/`rxString`) que le reste du pilote de fichiers —
+> lui bien vérifié fonctionnel (upload de ROM, etc.). Désassemblage fait avec
+> `dnfile`/`dncil` (Python, sans dépendance à `dotnet`/ILSpy) sur le binaire
+> fourni par l'utilisateur.
+
+```csharp
+// DeviceIO.dirOpen(string path)  — RVA 0x38fc
+txCMD(0xC3);              // CMD_F_DIR_OPN
+txString(path);
+checkStatus();             // lit CMD_STATUS séparé, comme CMD_F_DIR_MK
+
+// DeviceIO.dirRead(int max_name_len = 0xFFFF)  — RVA 0x3918
+// (l'argument vaut 0xFFFF si l'appelant passe 0 — seule valeur jamais
+// exercée dans ce binaire, aucun appelant ne le fait varier)
+txCMD(0xC4);               // CMD_F_DIR_RD
+tx16(max_name_len);        // ARGUMENT REQUIS — silence total sans lui
+byte status = rx8();
+if (status != 0) throw;
+return rxFileInfo();
+
+// DeviceIO.rxFileInfo()  — RVA 0x3718
+size   = rx32();           // u32 LE
+date   = rx16();           // u16 FAT (ignorée)
+time   = rx16();           // u16 FAT (ignorée)
+attrib = rx8();            // u8 — AM_DIR = 0x10 → dossier
+name   = rxString();       // u16 longueur + octets UTF-8 (PAS un u8 !)
+```
+
+Trame complète, en boucle jusqu'à `name == ""` :
 
 ```text
-TX  CMD_F_DIR_OPN                     trame 4 octets
-TX  u16 len + chemin UTF-8            ("" ou "/" = racine, "/GAMES" = sous-dossier)
-    → résultat : code FatFs lu via CMD_STATUS (comme CMD_F_DIR_MK)
-                 0 = OK ; 4 (NO_FILE) / 5 (NO_PATH) → dossier absent (liste vide)
-
-puis, en boucle jusqu'à name_len == 0 :
 TX  CMD_F_DIR_RD                      trame 4 octets
+TX  u16 max_name_len                  0xFFFF (aucun appelant connu n'utilise autre chose)
 RX  u8  status                        FRESULT (0 = OK, sinon erreur → abandon)
 RX  u32 size                          taille du fichier (little-endian)
-RX  u16 date                          date FAT (0 accepté ; ignorée par l'hôte)
-RX  u16 time                          heure FAT (idem)
+RX  u16 date                          date FAT (ignorée par l'hôte)
+RX  u16 time                          heure FAT (ignorée par l'hôte)
 RX  u8  attrib                        attributs FatFs — AM_DIR=0x10 → dossier
-RX  u8  name_len                      longueur du nom (0 = fin du dossier)
-RX  u8  name[name_len]                nom (LFN, UTF-8/ASCII)
+RX  u16 name_len + name (UTF-8)       rxString — longueur nulle = fin du dossier
 ```
 
 Pas de `count` en tête (`f_opendir` ne le connaît pas — d'où `CMD_F_DIR_SIZE`
-séparé), pas de fermeture explicite (le `DIR` est réutilisé au prochain `OPN`).
-Les entrées `.` / `..` sont filtrées côté hôte.
+séparé, lui aussi jamais exercé), pas de fermeture explicite (le `DIR` est
+réutilisé au prochain `OPN`). Les entrées `.` / `..` sont filtrées côté hôte.
 
-**Points à confirmer sur la vraie carte** (si `ls` échoue, la trace le montre) :
-1. `CMD_F_DIR_RD` prend‑il un argument (p. ex. `u16` longueur max de nom) ? Ici : **aucun**.
-   → **suspect principal** : c'est cette commande précise qui reste muette (voir
-   ci‑dessus), alors que `CMD_F_DIR_OPN` juste avant répond correctement — il
-   manque très probablement un paramètre que le firmware attend avant de
-   traiter la commande (silence = il attend encore des octets côté RX, pas un
-   vrai timeout).
-2. ~~`CMD_F_DIR_OPN` répond‑il par `CMD_STATUS` (hypothèse retenue) ou par un
-   octet inline ?~~ **Confirmé par la trace du 2026‑08‑28** : c'est bien
-   `CMD_STATUS` séparé (comme `CMD_F_DIR_MK`) — cette partie fonctionne.
-3. Ordre / tailles exacts des champs FILINFO (`size`/`date`/`time`/`attrib`/`name`)
-   — toujours inconnu, `CMD_F_DIR_RD` ne répondant jamais assez pour les
-   observer.
-
-Recherche effectuée dans `reference/edlink` (dépôt C# officiel) le 2026‑08‑28 :
-aucune piste supplémentaire — `CMD_F_DIR_OPN`/`RD`/etc. sont *déclarés* dans
-`Device/DeviceIO_V1.cs` mais **jamais appelés**, dans aucune des 5 familles de
-cartes (`DEV_TED`, `DEV_MEGA`, `DEV_ED64`, `DEV_GBA`, `DEV_EDN8`) ; l'outil CLI
-officiel n'a d'ailleurs pas de commande `ls` du tout (seulement `cp`, qui
-reconstruit les chemins distants à partir de l'arborescence *locale*, sans
-jamais interroger la carte). Seul `CMD_F_DIR_MK` (créer un dossier, via
-`FS_MAKEPATH` à l'upload) est réellement exercé dans ce dépôt — et rien ne
-prouve qu'il ait déjà été testé sur cette carte non plus. Le format exact de
-`CMD_F_DIR_RD` n'a donc **aucune source de référence connue** ; la seule voie
-qui reste est une trace `EDLINK_TRACE` sur la vraie carte.
+**Historique du diagnostic** (pour mémoire) : une première implémentation
+reconstituait ce protocole sans aucune source (`CMD_F_DIR_OPN`/`RD` sont
+déclarées dans `reference/edlink` mais jamais appelées, par aucun outil, sur
+aucune des 5 familles de cartes) — elle omettait l'argument `u16` de
+`CMD_F_DIR_RD` et lisait le nom via un `u8 name_len`. Sur une vraie Turbo
+EverDrive Pro (28/08/2026), `CMD_F_DIR_OPN` répondait correctement mais
+`CMD_F_DIR_RD` restait totalement muet : le firmware attendait les 2 octets
+de `max_name_len` qui n'arrivaient jamais. Résolu par désassemblage direct de
+`turbolink.exe` plutôt que par une nouvelle supposition.
 
 ### Trace série (`EDLINK_TRACE`)
 
@@ -268,8 +269,9 @@ tester le mode conservateur.
 - **RTC sur TED Pro** : la référence lève `UnsupportedCmd`
   (`DEV_TED/DeviceIO.cs → RtcSet/RtcCal`) → non exposé.
 - ~~**Listing de dossiers SD**~~ : implémenté (`CMD_F_DIR_OPN` / `CMD_F_DIR_RD`),
-  reconstitué d'après la couche FS du firmware — cf. section dédiée ci‑dessus.
-  À valider sur matériel réel.
+  protocole confirmé par désassemblage de `turbolink.exe` — cf. section dédiée
+  ci‑dessus. À reconfirmer sur matériel réel (corrigé le 28/08/2026, pas encore
+  retesté sur une vraie carte).
 
 ## Tests
 

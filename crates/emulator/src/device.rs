@@ -246,7 +246,13 @@ impl Device {
                     self.dir_open(&path);
                 }
                 CMD_F_DIR_RD => {
-                    println!("[cmd] F_DIR_RD");
+                    // Argument u16 (longueur max de nom, non utilisé ici) — le
+                    // firmware réel de `turbolink.exe` l'attend avant de
+                    // répondre quoi que ce soit (voir DeviceIO.dirRead
+                    // décompilé) : le lire est indispensable, sous peine de
+                    // désynchroniser le flux série avec la commande suivante.
+                    let max_name_len = read_u16(master)?;
+                    println!("[cmd] F_DIR_RD max_name_len={max_name_len}");
                     self.dir_read(master)?;
                 }
                 other => {
@@ -532,29 +538,31 @@ impl Device {
     }
 
     /// `CMD_F_DIR_RD` : renvoie l'entrée suivante du dossier ouvert, au format
-    /// FILINFO du firmware :
+    /// FILINFO du firmware réel (décompilé de `DeviceIO.rxFileInfo` dans
+    /// `turbolink.exe`) :
     ///   `u8 status`, `u32 size` (LE), `u16 date`, `u16 time`, `u8 attrib`,
-    ///   `u8 name_len`, `name_len` octets de nom.
+    ///   puis le nom en `rxString` (`u16 name_len` + `name_len` octets UTF-8).
     /// Fin de dossier (ou aucun dossier ouvert) : `name_len == 0`.
     fn dir_read(&mut self, master: &mut PtyMaster) -> io::Result<()> {
         let next = self.dir_iter.as_mut().and_then(|it| it.next());
         match next {
             Some(e) => {
                 let name = e.name.as_bytes();
-                let name = &name[..name.len().min(255)];
+                let name = &name[..name.len().min(u16::MAX as usize)];
                 let attrib = if e.is_dir { AM_DIR } else { 0 };
                 master.write_all(&[FR_OK])?;
                 master.write_all(&(e.size.min(u32::MAX as u64) as u32).to_le_bytes())?;
                 master.write_all(&0u16.to_le_bytes())?; // date FAT
                 master.write_all(&0u16.to_le_bytes())?; // heure FAT
-                master.write_all(&[attrib, name.len() as u8])?;
+                master.write_all(&[attrib])?;
+                master.write_all(&(name.len() as u16).to_le_bytes())?;
                 master.write_all(name)?;
             }
             None => {
                 // fin du dossier : statut OK, puis FILINFO nul (name_len = 0).
-                // 11 octets : status + size(4) + date(2) + time(2) + attrib + name_len
+                // status(1) + size(4) + date(2) + time(2) + attrib(1) + name_len_u16(2)
                 self.dir_iter = None;
-                master.write_all(&[FR_OK, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])?;
+                master.write_all(&[FR_OK, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])?;
             }
         }
         Ok(())
@@ -721,6 +729,12 @@ fn read_u8(master: &mut PtyMaster) -> io::Result<u8> {
     let mut b = [0u8; 1];
     master.read_exact(&mut b)?;
     Ok(b[0])
+}
+
+fn read_u16(master: &mut PtyMaster) -> io::Result<u16> {
+    let mut b = [0u8; 2];
+    master.read_exact(&mut b)?;
+    Ok(u16::from_le_bytes(b))
 }
 
 fn read_u32(master: &mut PtyMaster) -> io::Result<u32> {

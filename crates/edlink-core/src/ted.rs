@@ -317,25 +317,29 @@ impl Ted {
     /// `/GAMES`). Le dossier racine est `""` ou `/`. Renvoie les entrées
     /// (dossiers et fichiers) avec leur taille.
     ///
-    /// Protocole (couche FS du firmware MCU partagé des cartes « Pro » —
-    /// EverDrive-N8 Pro / Mega Pro / **Turbo Pro** — d'après `edFirmware`) :
+    /// Protocole désassemblé le 28/08/2026 depuis `turbolink.exe` v1.0.0.3
+    /// (l'outil CLI propre à la Turbo EverDrive, distinct du `edlink`
+    /// générique — IL décompilé de `DeviceIO.dirOpen`/`dirRead`/`rxFileInfo`,
+    /// jamais câblées à un flag CLI mais écrites avec les mêmes primitives
+    /// `txCMD`/`rx8`/`rx16`/`rx32`/`rxString` que le reste du pilote de
+    /// fichiers, lui bien vérifié fonctionnel) :
     ///
     /// ```text
     /// TX  CMD_F_DIR_OPN + tx_string(path)      → statut FatFs lu via CMD_STATUS
-    /// puis, en boucle jusqu'à name_len == 0 :
+    /// puis, en boucle jusqu'à name == "" :
     /// TX  CMD_F_DIR_RD
-    /// RX  u8  status      FRESULT (0 = OK, sinon erreur)
-    ///     u32 size        taille du fichier (little-endian)
-    ///     u16 date        date FAT (ignorée ici)
-    ///     u16 time        heure FAT (ignorée ici)
-    ///     u8  attrib      attributs FatFs (AM_DIR = dossier)
-    ///     u8  name_len    longueur du nom (0 = fin du dossier)
-    ///     u8  name[name_len]
+    /// TX  u16 max_name_len   (0xFFFF — argument manquant dans la 1ère version
+    ///                         de ce fichier, cause du silence total observé
+    ///                         sur matériel réel : le firmware restait bloqué
+    ///                         à attendre ces 2 octets)
+    /// RX  u8  status         FRESULT (0 = OK, sinon erreur → abandon)
+    /// RX  u32 size           taille du fichier (little-endian)
+    /// RX  u16 date           date FAT (ignorée ici)
+    /// RX  u16 time           heure FAT (ignorée ici)
+    /// RX  u8  attrib         attributs FatFs (AM_DIR = dossier)
+    /// RX  u16 name_len + name (rxString — PAS un u8 comme supposé avant :
+    ///                          longueur nulle = fin du dossier)
     /// ```
-    ///
-    /// La colonne ASCII / le « count » en tête de l'ancienne implémentation
-    /// n'existent pas côté firmware : `f_opendir` ne connaît pas le nombre
-    /// d'entrées d'avance (d'où la commande séparée `CMD_F_DIR_SIZE`).
     pub fn list_dir(&mut self, path: &str) -> Result<Vec<SdEntry>> {
         let dev = get_dev_path(path);
         // Une vraie carte SD peut marquer une longue pause (parcours FAT,
@@ -358,29 +362,10 @@ impl Ted {
         }
 
         let mut out = Vec::new();
-        let mut first = true;
         loop {
             self.link.tx_cmd(CMD_F_DIR_RD)?;
-            let status = match self.link.rx8() {
-                Ok(v) => v,
-                // Silence total dès la première trame CMD_F_DIR_RD, alors que
-                // CMD_F_DIR_OPN (juste avant, même carte, même session) a bien
-                // répondu : ce n'est pas un timeout « carte lente », c'est le
-                // signe que 0xC4 n'est pas traité comme on l'attend — soit
-                // l'opcode n'est pas implémenté séparément de DIR_OPN, soit il
-                // attend un argument qu'on n'envoie pas (voir docs/PROTOCOL.md,
-                // « points à confirmer »). Protocole reconstitué, jamais
-                // exercé par l'outil `edlink` de référence.
-                Err(EdError::Other(msg)) if first && msg.contains("renvoyé que 0/") => {
-                    return Err(EdError::Other(format!(
-                        "CMD_F_DIR_OPN a répondu mais CMD_F_DIR_RD reste muet : protocole de \
-                         listing reconstitué, probablement incomplet ou non supporté par le \
-                         firmware de cette carte — {msg}"
-                    )));
-                }
-                Err(e) => return Err(e),
-            };
-            first = false;
+            self.link.tx16(0xFFFF)?; // max_name_len (argument requis par le firmware)
+            let status = self.link.rx8()?;
             if status != FR_OK {
                 return Err(EdError::DeviceError(status));
             }
@@ -388,12 +373,10 @@ impl Ted {
             let _date = self.link.rx16()?;
             let _time = self.link.rx16()?;
             let attrib = self.link.rx8()?;
-            let name_len = self.link.rx8()? as usize;
-            if name_len == 0 {
+            let name = self.link.rx_string()?; // u16 longueur + UTF-8 (rxString)
+            if name.is_empty() {
                 break; // fin du dossier
             }
-            let name =
-                String::from_utf8_lossy(&self.link.rx_data(name_len)?).into_owned();
             if name == "." || name == ".." {
                 continue;
             }
