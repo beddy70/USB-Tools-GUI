@@ -16,7 +16,8 @@ const els = {
   modalOk: $("modal-ok"), modalCancel: $("modal-cancel"),
   transferBar: $("transfer-bar"), transferLabel: $("transfer-label"),
   transferPct: $("transfer-pct"), transferFill: $("transfer-fill"),
-  viewIcons: $("view-icons"), viewList: $("view-list"), viewCarousel: $("view-carousel"),
+  viewIcons: $("view-icons"), viewList: $("view-list"),
+  gamesExplorer: $("games-explorer"),
   gameModal: $("game-modal"), gameModalClose: $("game-modal-close"),
   gameBoxart: $("game-boxart"), gameBoxartPh: $("game-boxart-ph"),
   gameTitle: $("game-title"), gameMeta: $("game-meta"),
@@ -79,7 +80,7 @@ function askPrompt(message, defaultValue = "") {
 // État de l'explorateur de carte SD.
 let explorerPath = "";   // chemin SD courant ("" = racine)
 let explorerBusy = false;
-let explorerView = "grid"; // "grid" = icônes, "list" = liste, "carousel" = jeux par catégorie
+let explorerView = "grid"; // "grid" = icônes, "list" = liste
 const EXPLORER_MTYPE = "text/x-ted-sd";
 let lastScreenB64 = null;  // dernière capture (base64)
 // Choix discrètes proposés par les curseurs de capture (index du curseur -> valeur).
@@ -146,6 +147,7 @@ document.querySelectorAll(".tab-btn").forEach((btn) => {
     document.querySelectorAll(".tab-panel").forEach((p) => p.classList.remove("active"));
     btn.classList.add("active");
     $("tab-" + btn.dataset.tab).classList.add("active");
+    if (btn.dataset.tab === "games") renderGamesTab();
     if (btn.dataset.tab === "transfer") renderExplorer();
     // À l'ouverture de l'onglet Mémoire : sur l'émulateur, on relit les données
     // fraîches (le cache peut être périmé après un load/reset). Sur matériel
@@ -282,17 +284,6 @@ function renderCrumbs() {
 async function renderExplorer() {
   if (explorerBusy) return;
   explorerBusy = true;
-
-  // Vue « Jeux » (🎴) : navigateur dédié (catégories -> mosaïque), indépendant
-  // du dossier courant de l'explorateur générique (explorerPath/crumbs).
-  if (explorerView === "carousel") {
-    els.explorer.innerHTML = "";
-    els.explorerEmpty.hidden = true;
-    els.explorerStatus.textContent = "";
-    els.explorer.appendChild(await renderGamesBrowser());
-    explorerBusy = false;
-    return;
-  }
 
   renderCrumbs();
   els.explorer.innerHTML = "";
@@ -507,6 +498,11 @@ async function renderGamesBrowser() {
   const rootLabel = document.createElement("span");
   rootLabel.className = "games-root-label";
   rootLabel.textContent = "📁 " + gamesRoot;
+  const actions = document.createElement("div");
+  actions.className = "games-actions";
+  const refresh = document.createElement("button");
+  refresh.className = "btn ghost"; refresh.title = "Actualiser"; refresh.textContent = "⟳";
+  refresh.addEventListener("click", () => renderGamesTab());
   const gear = document.createElement("button");
   gear.className = "btn ghost"; gear.textContent = "⚙ Changer le dossier de jeux";
   gear.addEventListener("click", async () => {
@@ -517,10 +513,12 @@ async function renderGamesBrowser() {
     gamesRoot = normalizeGamesPath(v);
     saveGamesRoot(gamesRoot);
     gamesLevel = "categories";
-    renderExplorer();
+    renderGamesTab();
   });
+  actions.appendChild(refresh);
+  actions.appendChild(gear);
   bar.appendChild(rootLabel);
-  bar.appendChild(gear);
+  bar.appendChild(actions);
   container.appendChild(bar);
 
   container.appendChild(
@@ -572,7 +570,7 @@ async function buildCategoryList() {
       gamesCategory = entry.name;
       gamesCategoryColors = [c1, c2];
       gamesLevel = "mosaic";
-      renderExplorer();
+      renderGamesTab();
     });
     list.appendChild(row);
   });
@@ -589,7 +587,7 @@ async function buildMosaic() {
   header.className = "mosaic-header";
   const back = document.createElement("button");
   back.className = "btn ghost"; back.textContent = "← Catégories";
-  back.addEventListener("click", () => { gamesLevel = "categories"; renderExplorer(); });
+  back.addEventListener("click", () => { gamesLevel = "categories"; renderGamesTab(); });
   const title = document.createElement("h3");
   title.className = "mosaic-title";
   title.textContent = gamesCategory;
@@ -722,19 +720,15 @@ function setView(v) {
   explorerView = v;
   els.viewIcons.classList.toggle("active", v === "grid");
   els.viewList.classList.toggle("active", v === "list");
-  els.viewCarousel.classList.toggle("active", v === "carousel");
-  // La vue « Jeux » a son propre navigateur (catégories/mosaïque), sans
-  // rapport avec le dossier courant de l'explorateur générique : la barre
-  // de navigation habituelle (fil d'Ariane, dossier parent, import) n'a pas
-  // de sens ici.
-  const isGames = v === "carousel";
-  els.crumbs.hidden = isGames;
-  els.explorerUp.hidden = isGames;
-  els.explorerImport.hidden = isGames;
-  if (isGames) gamesLevel = "categories"; // repart toujours des catégories en rouvrant la vue
   renderExplorer();
 }
-els.viewCarousel.addEventListener("click", () => setView("carousel"));
+
+// Onglet GAMES : navigateur dédié (catégories -> mosaïque), à part de
+// l'explorateur générique de l'onglet Carte SD (dossier/vue indépendants).
+async function renderGamesTab() {
+  els.gamesExplorer.innerHTML = "";
+  els.gamesExplorer.appendChild(await renderGamesBrowser());
+}
 
 // ---- dépôt de fichiers OS -> explorateur (upload) ----
 ["dragenter", "dragover"].forEach((evt) =>

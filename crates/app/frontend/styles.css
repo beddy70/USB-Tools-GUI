@@ -188,6 +188,7 @@ button.btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; box-s
 .games-topbar { display: flex; align-items: center; justify-content: space-between;
   gap: 12px; margin-bottom: 14px; }
 .games-root-label { font-family: var(--mono); font-size: 12.5px; color: var(--muted); }
+.games-actions { display: flex; align-items: center; gap: 8px; }
 .games-error { padding: 30px 16px; text-align: center; color: var(--muted); font-size: 13px; line-height: 1.7; }
 
 /* Catégories : une rangée colorée par dossier, gros texte stylé (~40px). */
@@ -233,7 +234,8 @@ button.btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; box-s
 .mosaic-wrap .games-error { color: rgba(255,255,255,0.9); text-shadow: 0 1px 3px rgba(0,0,0,0.3); }
 
 /* Fiche de détail (modale) */
-.modal-box.game-box { max-width: 640px; width: 90vw; position: relative; }
+.modal-box.game-box { max-width: 640px; width: 90vw; max-height: 88vh;
+  overflow-y: auto; position: relative; }
 .modal-close { position: absolute; top: 10px; right: 10px; background: transparent; border: none;
   color: var(--muted); font-size: 16px; cursor: pointer; padding: 6px; line-height: 1; }
 .modal-close:hover { color: var(--cyan); }
@@ -249,8 +251,8 @@ button.btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; box-s
 .game-meta { font-size: 12.5px; color: var(--muted); line-height: 1.7; margin-bottom: 10px; }
 .game-meta b { color: var(--cyan); font-weight: 600; }
 .game-snap-wrap { border-radius: 8px; overflow: hidden; border: 1px solid var(--border);
-  margin-bottom: 14px; max-height: 140px; background: var(--bg-2); }
-.game-snap-wrap img { width: 100%; display: block; }
+  margin-bottom: 14px; background: var(--bg-2); }
+.game-snap-wrap img { width: 100%; height: auto; display: block; }
 .game-actions { display: flex; gap: 10px; margin-top: auto; }
 @media (max-width: 560px) {
   .game-box-body { flex-direction: column; }

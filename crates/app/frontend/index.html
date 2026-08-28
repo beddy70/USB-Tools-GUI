@@ -26,6 +26,7 @@
       <aside class="sidebar">
         <nav>
           <button class="tab-btn active" data-tab="connect"><span>🔌</span> Connexion</button>
+          <button class="tab-btn" data-tab="games"><span>🕹️</span> GAMES</button>
           <button class="tab-btn" data-tab="transfer"><span>📤</span> Carte SD</button>
           <button class="tab-btn" data-tab="play"><span>🎮</span> Jouer</button>
           <button class="tab-btn" data-tab="memory"><span>🧠</span> Mémoire</button>
@@ -55,6 +56,12 @@
           </div>
         </section>
 
+        <!-- GAMES : navigateur catégories -> mosaïque -->
+        <section id="tab-games" class="tab-panel">
+          <h2>Jeux par catégorie</h2>
+          <div class="explorer" id="games-explorer"></div>
+        </section>
+
         <!-- TRANSFERT : EXPLORATEUR -->
         <section id="tab-transfer" class="tab-panel">
           <h2>Explorateur de carte SD</h2>
@@ -65,7 +72,6 @@
             <div class="view-toggle">
               <button class="btn ghost view-btn active" id="view-icons" title="Vue en icônes">▦</button>
               <button class="btn ghost view-btn" id="view-list" title="Vue en liste">☰</button>
-              <button class="btn ghost view-btn" id="view-carousel" title="Jeux par catégorie (pochettes Libretro Thumbnails)">🎴</button>
             </div>
             <button class="btn primary" id="explorer-import">📂 Importer…</button>
           </div>
