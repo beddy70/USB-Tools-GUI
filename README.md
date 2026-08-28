@@ -232,11 +232,14 @@ Reprend la palette « retrowave » de l'application.
 
 ## Limitations connues
 
-- **Listing de dossiers SD reconstitué** : `CMD_F_DIR_OPN` / `CMD_F_DIR_RD` ne
-  sont pas câblés par la référence `edlink` ; l'implémentation reproduit la
-  couche FS du firmware MCU des cartes « Pro » et **reste à valider sur matériel
-  réel** (`EDLINK_TRACE=1 edlink-cli --port … ls sd:/GAMES` pour capturer la
-  trame réelle et ajuster — cf. `docs/PROTOCOL.md`).
+- **Listing de dossiers SD reconstitué, confirmé en échec sur matériel réel** :
+  `CMD_F_DIR_OPN` / `CMD_F_DIR_RD` ne sont pas câblés par la référence
+  `edlink` ; l'implémentation reproduit la couche FS du firmware MCU des
+  cartes « Pro », mais une session de test sur une vraie Turbo EverDrive Pro
+  montre que `CMD_F_DIR_RD` ne répond pas (l'onglet Carte SD affiche un
+  timeout). En attente d'une trace `EDLINK_TRACE=1 edlink-cli --port … ls
+  sd:/GAMES` sur cette carte pour corriger le protocole — cf.
+  `docs/PROTOCOL.md`.
 - **TED Pro non compatible RTC** via `edlink` (`RtcSet`/`RtcCal` lèvent
   `UnsupportedCmd`) : le RTC n'est pas exposé.
 - **Lecture mémoire (`memrd`) = bus cartouche** : sur matériel réel, chaque
@@ -245,6 +248,12 @@ Reprend la palette « retrowave » de l'application.
   auto). Les vues *VRAM / CRAM* utilisent l'instantané `*v` du menu (comme la
   capture d'écran) et restent disponibles partout, menu affiché. Cf.
   `docs/PROTOCOL.md`.
+- **Panne du port série récupérable seulement par reconnexion** : une erreur
+  d'E/S peut laisser le port série inutilisable pour le reste de la session
+  (constaté sur matériel réel). L'app détecte ce cas (message « connexion
+  perdue ») et repasse en « Déconnecté » automatiquement plutôt que de
+  répéter la même erreur en boucle — il suffit alors de **Connecter** à
+  nouveau.
 - Non testé sur matériel tant que le menu OS n'est pas accessible.
 
 ## Feuille de route

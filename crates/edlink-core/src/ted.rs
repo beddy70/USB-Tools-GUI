@@ -235,28 +235,30 @@ impl Ted {
 
     /// Réinitialise la console vers le menu de la carte (port de
     /// `MenuCmd.ResetToMenu`), en attendant le statut 'r'.
+    ///
+    /// Lecture **bloquante** (avec timeout élargi, le menu met jusqu'à ~2 s à
+    /// redémarrer) plutôt qu'un sondage `bytes_to_read()` : cette IOCTL
+    /// (`ClearCommError` côté Windows) s'est révélée mal supportée par le
+    /// pilote USB-CDC d'une vraie carte — une fois échouée, elle plante le
+    /// port série pour toute la suite de la session (« The device does not
+    /// recognize the command », os error 22, sur *toutes* les commandes
+    /// suivantes, jusqu'à déconnexion/reconnexion). Une lecture bloquante
+    /// classique (`ReadFile`) est le seul appel exercé partout ailleurs dans
+    /// le pilote et fonctionne de façon fiable.
     pub fn reset_to_menu(&mut self) -> Result<()> {
         self.host_reset(HOST_RST_ON)?;
         std::thread::sleep(std::time::Duration::from_millis(10));
         self.config_reset()?;
         self.host_reset(HOST_RST_OFF)?;
 
-        let deadline = std::time::Instant::now() + std::time::Duration::from_millis(2000);
-        loop {
-            if self.link.bytes_to_read()? > 0 {
-                let resp = self.link.rx8()?;
-                if resp != b'r' {
-                    return Err(EdError::Other(format!(
-                        "unexpected usb status: 0x{resp:02X}"
-                    )));
-                }
-                return Ok(());
-            }
-            if std::time::Instant::now() > deadline {
-                return Err(EdError::Other("reset timeout".into()));
-            }
-            std::thread::sleep(std::time::Duration::from_millis(5));
+        self.link.set_read_timeout(std::time::Duration::from_millis(2000))?;
+        let resp = self.link.rx8();
+        let _ = self.link.set_read_timeout(Link::OP_TIMEOUT);
+        let resp = resp?;
+        if resp != b'r' {
+            return Err(EdError::Other(format!("unexpected usb status: 0x{resp:02X}")));
         }
+        Ok(())
     }
 
     /// Reset console (bouton reset de l'outil).

@@ -71,11 +71,17 @@ Référence : `DeviceIO_V1.cs` (FileOpen/Read/Write/…).
 
 ### Listing de dossiers SD (`CMD_F_DIR_OPN` / `CMD_F_DIR_RD`)
 
-> ⚠️ **Reconstitué, non issu de l'`edlink` de référence.** Les commandes
-> `CMD_F_DIR_*` sont *déclarées* dans `DeviceIO_V1.cs` mais **jamais appelées**
-> (aucune carte n'expose de navigation SD via edlink). L'implémentation ci‑dessous
-> reproduit la couche FS (`f_opendir` / `f_readdir`) du firmware MCU partagé des
-> cartes « Pro ». **À valider sur matériel réel** (voir `EDLINK_TRACE` plus bas).
+> ⚠️ **Reconstitué, non issu de l'`edlink` de référence — confirmé erroné sur
+> matériel réel.** Les commandes `CMD_F_DIR_*` sont *déclarées* dans
+> `DeviceIO_V1.cs` mais **jamais appelées** (aucune carte n'expose de
+> navigation SD via edlink). L'implémentation ci‑dessous reproduit la couche FS
+> (`f_opendir` / `f_readdir`) du firmware MCU partagé des cartes « Pro », mais
+> une session de test sur une vraie Turbo EverDrive Pro (2026‑08‑28) montre que
+> `CMD_F_DIR_RD` ne répond pas (timeout total, 0 octet reçu, alors que
+> `CMD_F_DIR_OPN` + `CMD_STATUS` passent). Au moins une des hypothèses
+> ci‑dessous est donc fausse. **Prochaine étape : capturer une trace
+> `EDLINK_TRACE` sur cette carte** (voir plus bas) pour corriger le protocole
+> avec des données réelles plutôt que deviner davantage.
 
 ```text
 TX  CMD_F_DIR_OPN                     trame 4 octets
@@ -110,6 +116,21 @@ octet émis/reçu par `edlink-core`. Pour capturer le vrai protocole d'une carte
 
 ```bash
 EDLINK_TRACE=1 edlink-cli --port /dev/cu.usbmodemXXXX ls sd:/GAMES
+```
+
+Sous Windows (`edlink-cli.exe`, port `COMx`), avec le résultat redirigé vers un
+fichier pour le partager facilement :
+
+```bat
+:: Invite de commandes (cmd.exe)
+set EDLINK_TRACE=1
+edlink-cli.exe --port COM3 ls sd:/ > trace.txt 2>&1
+```
+
+```powershell
+# PowerShell
+$env:EDLINK_TRACE = 1
+.\edlink-cli.exe --port COM3 ls sd:/ 2>&1 | Tee-Object trace.txt
 ```
 
 ### Instantané VRAM / CRAM (`*v`) — capture d'écran & visualiseur mémoire
@@ -160,6 +181,19 @@ la capture d'écran via `AppState.screen_snap`). Consommateurs :
 3. `AppStart` : `FifoWR("*s")`.
 
 Référence : `DEV_TED/MenuCmd.cs`, `DEV_TED/DeviceIO.cs`, `DeviceCmd.AppDeploy`.
+
+> ⚠️ **Attendre le statut `'r'` : lecture bloquante, pas `bytes_to_read()`.**
+> La référence C# sonde `Link.BytesToRead` en boucle avant de lire. Sur
+> matériel réel (Windows), l'appel équivalent côté `serialport`
+> (`bytes_to_read()` → IOCTL `ClearCommError`) a été observé en échec avec
+> `os error 22` (« The device does not recognize the command »), et **ce
+> premier échec rend le port série inutilisable pour toute la suite de la
+> session** (chaque commande suivante échoue à l'identique, y compris des
+> commandes sans rapport, jusqu'à déconnexion/reconnexion). `Ted::reset_to_menu`
+> attend désormais le statut avec une lecture bloquante classique
+> (`set_read_timeout(2000ms)` + `rx8()`), le seul type d'appel exercé partout
+> ailleurs dans le pilote et qui fonctionne de façon fiable. `Link::bytes_to_read`
+> a été retiré (plus aucun appelant).
 
 ### Lecture mémoire (`CMD_MEM_RD`)
 

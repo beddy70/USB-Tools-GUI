@@ -66,7 +66,17 @@ async function safeInvoke(cmd, args, okMsg) {
     if (okMsg) log(okMsg, "ok");
     return res;
   } catch (e) {
-    log(String(e), "err");
+    const msg = String(e);
+    log(msg, "err");
+    // Le backend referme la connexion et préfixe ainsi le message quand une
+    // erreur d'E/S a rendu le port série inutilisable (vu sur matériel réel :
+    // sinon chaque commande suivante répète la même erreur cryptique). On
+    // repasse l'UI en « Déconnecté » plutôt que de laisser croire que la
+    // carte répond encore.
+    if (msg.includes("connexion perdue")) {
+      setConnected(false);
+      els.infoCard.hidden = true;
+    }
     return null;
   }
 }

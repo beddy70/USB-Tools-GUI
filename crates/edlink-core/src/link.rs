@@ -170,10 +170,6 @@ impl Link {
         Ok(())
     }
 
-    pub fn bytes_to_read(&mut self) -> Result<usize> {
-        Ok(self.port.bytes_to_read()? as usize)
-    }
-
     pub fn port_name(&self) -> Result<String> {
         Ok(self.port.name().unwrap_or_default())
     }

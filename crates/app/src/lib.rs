@@ -64,7 +64,28 @@ fn with_ted<R>(
 ) -> Result<R, String> {
     let mut guard = state.ted.lock().unwrap();
     match guard.as_mut() {
-        Some(t) => f(t).map_err(|e| e.to_string()),
+        Some(t) => match f(t) {
+            Ok(v) => Ok(v),
+            Err(e) => {
+                // Constaté sur matériel réel : une erreur d'E/S peut laisser le
+                // port série dans un état irrécupérable — toute commande
+                // suivante échoue alors à l'identique tant qu'on ne rouvre pas
+                // la connexion. On la referme donc ici plutôt que de laisser
+                // l'utilisateur cliquer en boucle sur la même erreur cryptique ;
+                // le préfixe « connexion perdue » signale au frontend de
+                // repasser l'UI en « Déconnecté ».
+                let is_io = matches!(&e, EdError::Io(_));
+                if is_io {
+                    *guard = None;
+                }
+                let msg = e.to_string();
+                Err(if is_io {
+                    format!("connexion perdue ({msg}) — reconnectez-vous")
+                } else {
+                    msg
+                })
+            }
+        },
         None => Err("Aucune carte connectée. Connectez-vous d'abord.".into()),
     }
 }
