@@ -305,7 +305,11 @@ hr.sep { border: none; border-top: 1px solid var(--border); margin: 26px 0; }
   display: flex; gap: 14px; height: var(--log-h, 150px); min-height: 60px; padding: 10px 20px; }
 .log-title { color: var(--muted); font-size: 12px; writing-mode: vertical-rl; transform: rotate(180deg); }
 .log { flex: 1; overflow-y: auto; font-family: var(--mono); font-size: 12px; color: var(--text);
-  line-height: 1.55; padding-right: 6px; }
+  line-height: 1.55; padding-right: 6px;
+  /* body désactive la sélection (glisser du séparateur, sélection de sprites) ;
+     on la réactive ici pour pouvoir copier le texte du journal (Windows/WebView2
+     respecte user-select:none strictement, contrairement à macOS/Safari). */
+  user-select: text; cursor: text; }
 .log .ok { color: var(--green); }
 .log .err { color: var(--red); }
 .log .info { color: var(--cyan); }
