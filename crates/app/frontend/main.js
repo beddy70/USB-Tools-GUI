@@ -850,6 +850,11 @@ function confirmMatch(cached) {
   if (gameMatchInfoTimer) { clearTimeout(gameMatchInfoTimer); gameMatchInfoTimer = null; }
   els.gameMatchInfo.hidden = true;
   log(`✔ « ${entry.name} » associé à « ${cached.matchedTitle} » (mémorisé)`, "ok");
+  // Rafraîchit la mosaïque derrière la fiche : sans ça, le badge de
+  // pourcentage restait affiché sur la vignette (le cache mémoire de cette
+  // vignette précise n'était mis à jour qu'en cas de réouverture de la
+  // fiche). La fiche elle-même reste ouverte par-dessus (élément séparé).
+  if (gamesLevel === "mosaic") renderGamesTab();
 }
 
 function openGameModal(entry, full) {
