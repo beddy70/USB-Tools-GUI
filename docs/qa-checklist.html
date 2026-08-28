@@ -164,10 +164,11 @@
       📎 Joignez une capture d'écran à une ligne (bouton dans la colonne
       « Capture ») pour illustrer un problème. Les images ne sont pas
       envoyées nulle part — elles restent dans ce navigateur ; téléchargez-les
-      pour les joindre à votre e-mail, à côté du texte Markdown collé.
+      en un seul .zip pour les joindre à votre e-mail, à côté du texte
+      Markdown collé.
       <span class="count" id="shotsCount">0 capture(s) jointe(s)</span>
     </p>
-    <button id="btnDownloadShots" disabled>💾 Télécharger les captures</button>
+    <button id="btnDownloadShots" disabled>💾 Télécharger en .zip</button>
   </div>
 
   <div class="card">
@@ -527,19 +528,127 @@
     if (e.key === "Escape" && !$("lightbox").hidden) $("lightbox").hidden = true;
   });
 
+  // ---------------------------------------------------------------- zip
+  // Écrivain ZIP minimal, sans dépendance (aucun CDN ici) : méthode STORE
+  // (pas de compression — inutile, les captures sont déjà en JPEG). Suffisant
+  // pour regrouper les pièces jointes en un seul fichier à joindre à l'e-mail.
+  function crc32(bytes) {
+    if (!crc32.table) {
+      const t = new Uint32Array(256);
+      for (let n = 0; n < 256; n++) {
+        let c = n;
+        for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+        t[n] = c >>> 0;
+      }
+      crc32.table = t;
+    }
+    let crc = 0xFFFFFFFF;
+    for (let i = 0; i < bytes.length; i++) crc = crc32.table[(crc ^ bytes[i]) & 0xFF] ^ (crc >>> 8);
+    return (crc ^ 0xFFFFFFFF) >>> 0;
+  }
+
+  function dosDateTime(d) {
+    const time = ((d.getHours() & 0x1f) << 11) | ((d.getMinutes() & 0x3f) << 5) | ((d.getSeconds() >> 1) & 0x1f);
+    const date = (((Math.max(0, d.getFullYear() - 1980)) & 0x7f) << 9) | (((d.getMonth() + 1) & 0xf) << 5) | (d.getDate() & 0x1f);
+    return { time, date };
+  }
+
+  function dataUrlToBytes(dataUrl) {
+    const bin = atob(dataUrl.split(",")[1] || "");
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return bytes;
+  }
+
+  // `entries` : [{ name, bytes: Uint8Array }] → Blob application/zip.
+  function buildZipBlob(entries) {
+    const enc = new TextEncoder();
+    const { time, date } = dosDateTime(new Date());
+    const parts = [];
+    const central = [];
+    let offset = 0;
+
+    for (const { name, bytes } of entries) {
+      const nameBytes = enc.encode(name);
+      const crc = crc32(bytes);
+      const size = bytes.length;
+      // Bit 11 (0x0800) = noms de fichiers en UTF-8 (langage encoding flag,
+      // APPNOTE 4.4.4) : sans lui, un extracteur strict peut mal décoder un nom
+      // accentué. Les noms générés ici sont déjà slugifiés en ASCII, mais on
+      // reste correct pour un `imageName` personnalisé.
+      const FLAG_UTF8 = 0x0800;
+
+      const lh = new Uint8Array(30 + nameBytes.length);
+      const ldv = new DataView(lh.buffer);
+      ldv.setUint32(0, 0x04034b50, true);
+      ldv.setUint16(4, 20, true);
+      ldv.setUint16(6, FLAG_UTF8, true);
+      ldv.setUint16(8, 0, true); // méthode 0 = STORE
+      ldv.setUint16(10, time, true);
+      ldv.setUint16(12, date, true);
+      ldv.setUint32(14, crc, true);
+      ldv.setUint32(18, size, true);
+      ldv.setUint32(22, size, true);
+      ldv.setUint16(26, nameBytes.length, true);
+      ldv.setUint16(28, 0, true);
+      lh.set(nameBytes, 30);
+      parts.push(lh, bytes);
+
+      const ch = new Uint8Array(46 + nameBytes.length);
+      const cdv = new DataView(ch.buffer);
+      cdv.setUint32(0, 0x02014b50, true);
+      cdv.setUint16(4, 20, true);
+      cdv.setUint16(6, 20, true);
+      cdv.setUint16(8, FLAG_UTF8, true);
+      cdv.setUint16(10, 0, true);
+      cdv.setUint16(12, time, true);
+      cdv.setUint16(14, date, true);
+      cdv.setUint32(16, crc, true);
+      cdv.setUint32(20, size, true);
+      cdv.setUint32(24, size, true);
+      cdv.setUint16(28, nameBytes.length, true);
+      cdv.setUint32(42, offset, true); // décalage de l'en-tête local
+      ch.set(nameBytes, 46);
+      central.push(ch);
+
+      offset += lh.length + bytes.length;
+    }
+
+    const centralSize = central.reduce((s, p) => s + p.length, 0);
+    const eocd = new Uint8Array(22);
+    const edv = new DataView(eocd.buffer);
+    edv.setUint32(0, 0x06054b50, true);
+    edv.setUint16(8, entries.length, true);
+    edv.setUint16(10, entries.length, true);
+    edv.setUint32(12, centralSize, true);
+    edv.setUint32(16, offset, true); // décalage du répertoire central
+
+    return new Blob([...parts, ...central, eocd], { type: "application/zip" });
+  }
+
   $("btnDownloadShots").addEventListener("click", () => {
     const rows = allShotRows();
-    rows.forEach((t, i) => {
+    if (!rows.length) return;
+    const usedNames = new Set();
+    const entries = rows.map((t) => {
       const r = state.rows[t.id];
-      setTimeout(() => {
-        const a = document.createElement("a");
-        a.href = r.image;
-        a.download = r.imageName || suggestedFilename(t);
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-      }, i * 250);
+      let name = r.imageName || suggestedFilename(t);
+      // Évite d'écraser une entrée en cas de doublon improbable (mêmes nom/casse).
+      let n = 2;
+      while (usedNames.has(name)) name = name.replace(/(\.\w+)?$/, `-${n++}$1`);
+      usedNames.add(name);
+      return { name, bytes: dataUrlToBytes(r.image) };
     });
+    const blob = buildZipBlob(entries);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const dateSlug = (state.meta.mDate || "").replace(/-/g, "");
+    a.href = url;
+    a.download = `captures-ted-qa${dateSlug ? "-" + dateSlug : ""}.zip`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   });
 
   function applyRowClass(tr, status) {
@@ -632,7 +741,7 @@
     if (shots.length) {
       lines.push("## Captures jointes");
       lines.push("");
-      lines.push("_Fichiers téléchargés séparément (bouton « 💾 Télécharger les captures ») — à joindre à l'e-mail :_");
+      lines.push("_Regroupées dans le .zip téléchargé (bouton « 💾 Télécharger en .zip ») — à joindre à l'e-mail :_");
       lines.push("");
       for (const t of shots) {
         lines.push(`- \`${state.rows[t.id].imageName}\` — ${SECTIONS[t.cat] || t.cat} : ${escapeCell(t.label)}`);
