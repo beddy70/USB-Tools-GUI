@@ -1180,7 +1180,8 @@ $("save-screen").addEventListener("click", async () => {
   let cram = null;         // Uint8Array(1024)
   let sheet = null;        // canvas natif (cols*cw × rows*ch)
   let geom = null;         // { spec, cw, ch, cols, rows, total, W, H, wordsPerCell }
-  let sel = -1;            // index de cellule sélectionnée
+  let selA = null, selB = null; // coins (cx,cy) de la sélection (glisser) ; null = aucune
+  let dragging = false;
   let capturing = false;
 
   // Les 6 tailles de sprite du VDC (16×16 à 32×64), + la tuile de fond 8×8.
@@ -1304,12 +1305,22 @@ $("save-screen").addEventListener("click", async () => {
       for (let gy = 0; gy <= geom.rows; gy++) { ctx.moveTo(0, gy * sy + 0.5); ctx.lineTo(cv.width, gy * sy + 0.5); }
       ctx.stroke();
     }
-    if (sel >= 0 && sel < geom.total) {
+    const r = selRect();
+    if (r) {
       const sx = geom.cw * z, sy = geom.ch * z;
-      const px = (sel % geom.cols) * sx, py = Math.floor(sel / geom.cols) * sy;
+      const rx = r.x0 * sx, ry = r.y0 * sy, rw = (r.x1 - r.x0 + 1) * sx, rh = (r.y1 - r.y0 + 1) * sy;
+      // Isole la sélection : assombrit tout le reste (trou dans le remplissage,
+      // règle even-odd) puis contour la zone choisie.
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(0, 0, cv.width, cv.height);
+      ctx.rect(rx, ry, rw, rh);
+      ctx.fillStyle = "rgba(0,0,0,0.55)";
+      ctx.fill("evenodd");
+      ctx.restore();
       ctx.strokeStyle = "#22e0ff";
       ctx.lineWidth = 2;
-      ctx.strokeRect(px + 1, py + 1, sx - 2, sy - 2);
+      ctx.strokeRect(rx + 1, ry + 1, rw - 2, rh - 2);
     }
   }
 
@@ -1322,30 +1333,68 @@ $("save-screen").addEventListener("click", async () => {
       `${geom.total} cellules ${label} · ${geom.cols}×${geom.rows} · VRAM 64 Ko`;
   }
 
-  function selectAt(clientX, clientY) {
-    if (!geom) return;
+  // Rectangle de sélection normalisé (coordonnées de cellule, incluses), ou
+  // `null` si aucune sélection (export = planche entière).
+  function selRect() {
+    if (!selA || !selB) return null;
+    return {
+      x0: Math.min(selA.cx, selB.cx), x1: Math.max(selA.cx, selB.cx),
+      y0: Math.min(selA.cy, selB.cy), y1: Math.max(selA.cy, selB.cy),
+    };
+  }
+
+  // Cellule (cx, cy) sous le pointeur, bornée à la grille (permet de glisser
+  // au-delà du canvas sans perdre la sélection en cours).
+  function cellAt(clientX, clientY) {
+    if (!geom) return null;
     const r = cv.getBoundingClientRect();
     const z = +elZoom.value;
     const px = (clientX - r.left) / z, py = (clientY - r.top) / z;
-    const cx = Math.floor(px / geom.cw), cy = Math.floor(py / geom.ch);
-    if (cx < 0 || cx >= geom.cols || cy < 0) return;
-    const idx = cy * geom.cols + cx;
-    if (idx < 0 || idx >= geom.total) return;
-    sel = idx;
+    const cx = Math.max(0, Math.min(geom.cols - 1, Math.floor(px / geom.cw)));
+    const cy = Math.max(0, Math.min(geom.rows - 1, Math.floor(py / geom.ch)));
+    return { cx, cy };
+  }
+
+  function clearSelection() {
+    selA = null; selB = null;
+    updateSelInfo();
+    paint();
+  }
+
+  function idxOf(cx, cy) { return cy * geom.cols + cx; }
+
+  function updateSelInfo() {
+    const r = selRect();
+    if (!r || !geom) { elInfo.textContent = "Aucune cellule sélectionnée."; return; }
     const hex = (n) => "$" + n.toString(16).toUpperCase();
-    let msg;
-    if (geom.spec.bg) {
-      const wordAddr = idx * 16, byteAddr = wordAddr * 2;
-      msg = `Cellule #${idx} · VRAM ${hex(wordAddr)} (mot) / ${hex(byteAddr)} (octet)`;
+    const wCells = r.x1 - r.x0 + 1, hCells = r.y1 - r.y0 + 1;
+
+    if (wCells === 1 && hCells === 1) {
+      const idx = idxOf(r.x0, r.y0);
+      if (geom.spec.bg) {
+        const wordAddr = idx * 16, byteAddr = wordAddr * 2;
+        elInfo.textContent = `Cellule #${idx} · VRAM ${hex(wordAddr)} (mot) / ${hex(byteAddr)} (octet)`;
+      } else {
+        const baseWord = idx * geom.wordsPerCell;
+        const patternBase = baseWord / 64; // n° de pattern SATB (unité 16×16)
+        const nBlocks = geom.spec.cw * geom.spec.ch;
+        elInfo.textContent = `Sprite #${idx} · VRAM ${hex(baseWord)} (mot de base) · pattern SATB #${patternBase}`
+          + (nBlocks > 1 ? ` (+${nBlocks - 1} bloc(s) 16×16 contigus)` : "");
+      }
+      return;
+    }
+
+    const nCells = wCells * hCells;
+    const pxW = wCells * geom.cw, pxH = hCells * geom.ch;
+    let msg = `Sélection ${wCells}×${hCells} cellules (${nCells}) · ${pxW}×${pxH} px`;
+    if (hCells === 1) {
+      const w0 = idxOf(r.x0, r.y0) * (geom.spec.bg ? 16 : geom.wordsPerCell);
+      const w1 = (idxOf(r.x1, r.y0) + 1) * (geom.spec.bg ? 16 : geom.wordsPerCell) - 1;
+      msg += ` · VRAM ${hex(w0)}–${hex(w1)} (mots)`;
     } else {
-      const baseWord = idx * geom.wordsPerCell;
-      const patternBase = baseWord / 64; // n° de pattern SATB (unité 16×16)
-      const nBlocks = geom.spec.cw * geom.spec.ch;
-      msg = `Sprite #${idx} · VRAM ${hex(baseWord)} (mot de base) · pattern SATB #${patternBase}`
-        + (nBlocks > 1 ? ` (+${nBlocks - 1} bloc(s) 16×16 contigus)` : "");
+      msg += ` · adresses non contiguës sur ${hCells} lignes`;
     }
     elInfo.textContent = msg;
-    paint();
   }
 
   async function sprCapture(refresh) {
@@ -1360,8 +1409,7 @@ $("save-screen").addEventListener("click", async () => {
     }
     vram = b64ToBytesLocal(res.vram_b64);
     cram = b64ToBytesLocal(res.cram_b64);
-    sel = -1;
-    elInfo.textContent = "Aucune cellule sélectionnée.";
+    clearSelection();
     refreshAll();
   }
 
@@ -1369,18 +1417,55 @@ $("save-screen").addEventListener("click", async () => {
   // partagé avec la capture d'écran quand il existe).
   openSpritesTab = () => { if (!vram) sprCapture(false); };
 
-  [elCell, elPal, elCols, elTransp].forEach((el) =>
-    el.addEventListener("input", () => { sel = -1; refreshAll(); }));
+  // Changer la taille de cellule ou le nombre de colonnes redéfinit la grille :
+  // une sélection en coordonnées de cellule n'aurait plus le même sens.
+  [elCell, elCols].forEach((el) =>
+    el.addEventListener("input", () => { clearSelection(); refreshAll(); }));
+  [elPal, elTransp].forEach((el) => el.addEventListener("input", refreshAll));
   [elZoom, elGrid].forEach((el) => el.addEventListener("input", paint));
-  cv.addEventListener("click", (e) => selectAt(e.clientX, e.clientY));
+
+  // Clic = cellule unique ; glisser = plage rectangulaire (limitera l'export PNG).
+  cv.addEventListener("mousedown", (e) => {
+    const c = cellAt(e.clientX, e.clientY);
+    if (!c) return;
+    dragging = true;
+    selA = c; selB = c;
+    updateSelInfo();
+    paint();
+  });
+  window.addEventListener("mousemove", (e) => {
+    if (!dragging) return;
+    const c = cellAt(e.clientX, e.clientY);
+    if (!c) return;
+    selB = c;
+    updateSelInfo();
+    paint();
+  });
+  window.addEventListener("mouseup", () => { dragging = false; });
+
+  $("spr-clear-sel").addEventListener("click", clearSelection);
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && $("tab-sprites")?.classList.contains("active")) clearSelection();
+  });
+
   $("spr-refresh").addEventListener("click", () => sprCapture(true));
   $("spr-save").addEventListener("click", async () => {
-    if (!sheet) return;
-    const path = await safeInvoke("pick_save", { default_name: "vram-tiles.png" });
+    if (!sheet || !geom) return;
+    const r = selRect();
+    let src = sheet, defaultName = "vram-tiles.png";
+    if (r) {
+      const w = (r.x1 - r.x0 + 1) * geom.cw, h = (r.y1 - r.y0 + 1) * geom.ch;
+      const crop = document.createElement("canvas");
+      crop.width = w; crop.height = h;
+      crop.getContext("2d").drawImage(sheet, r.x0 * geom.cw, r.y0 * geom.ch, w, h, 0, 0, w, h);
+      src = crop;
+      defaultName = "vram-tiles-selection.png";
+    }
+    const path = await safeInvoke("pick_save", { default_name: defaultName });
     if (!path) return;
-    const b64 = sheet.toDataURL("image/png").split(",")[1];
+    const b64 = src.toDataURL("image/png").split(",")[1];
     const ok = await safeInvoke("save_png", { data_base64: b64, path });
-    if (ok !== null) log("Planche VRAM enregistrée : " + path, "ok");
+    if (ok !== null) log((r ? "Sélection VRAM enregistrée" : "Planche VRAM enregistrée") + " : " + path, "ok");
   });
 })();
 

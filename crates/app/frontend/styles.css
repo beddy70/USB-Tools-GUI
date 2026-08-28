@@ -344,5 +344,5 @@ hr.sep { border: none; border-top: 1px solid var(--border); margin: 26px 0; }
   background:
     repeating-conic-gradient(#1a1830 0% 25%, #14122b 0% 50%) 0 0 / 20px 20px;
   max-height: 62vh; padding: 8px; }
-#spr-canvas { display: block; image-rendering: pixelated; cursor: crosshair; }
+#spr-canvas { display: block; image-rendering: pixelated; cursor: crosshair; user-select: none; }
 .spr-status { padding: 8px 2px; font-size: 12px; color: var(--muted); min-height: 14px; }

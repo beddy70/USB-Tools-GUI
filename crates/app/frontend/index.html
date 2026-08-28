@@ -245,9 +245,16 @@
             <label class="spr-check"><input type="checkbox" id="spr-grid" checked /> Grille</label>
             <label class="spr-check"><input type="checkbox" id="spr-transp" checked /> Index 0 transparent</label>
             <button class="btn ghost" id="spr-refresh">🔄 Capturer</button>
+            <button class="btn ghost" id="spr-clear-sel" title="Effacer la sélection (Échap)">✕ Sélection</button>
             <button class="btn ghost" id="spr-save">💾 PNG…</button>
           </div>
 
+          <p class="hint" style="margin-bottom:8px">
+            Cliquez une cellule, ou <strong>glissez</strong> pour sélectionner une
+            plage — l'export PNG n'enregistre alors que la sélection.
+            <span class="mono">Échap</span> ou « ✕ Sélection » l'efface (export
+            de toute la planche).
+          </p>
           <div class="spr-info" id="spr-info">Aucune cellule sélectionnée.</div>
 
           <div class="spr-canvas-wrap" id="spr-canvas-wrap">
