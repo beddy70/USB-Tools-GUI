@@ -79,8 +79,7 @@ function askPrompt(message, defaultValue = "") {
 // État de l'explorateur de carte SD.
 let explorerPath = "";   // chemin SD courant ("" = racine)
 let explorerBusy = false;
-let explorerView = "grid"; // "grid" = icônes, "list" = liste, "carousel" = pochettes
-let lastCarouselPath = null; // pour recentrer le carrousel (index 0) à chaque changement de dossier
+let explorerView = "grid"; // "grid" = icônes, "list" = liste, "carousel" = jeux par catégorie
 const EXPLORER_MTYPE = "text/x-ted-sd";
 let lastScreenB64 = null;  // dernière capture (base64)
 // Choix discrètes proposés par les curseurs de capture (index du curseur -> valeur).
@@ -283,6 +282,18 @@ function renderCrumbs() {
 async function renderExplorer() {
   if (explorerBusy) return;
   explorerBusy = true;
+
+  // Vue « Jeux » (🎴) : navigateur dédié (catégories -> mosaïque), indépendant
+  // du dossier courant de l'explorateur générique (explorerPath/crumbs).
+  if (explorerView === "carousel") {
+    els.explorer.innerHTML = "";
+    els.explorerEmpty.hidden = true;
+    els.explorerStatus.textContent = "";
+    els.explorer.appendChild(await renderGamesBrowser());
+    explorerBusy = false;
+    return;
+  }
+
   renderCrumbs();
   els.explorer.innerHTML = "";
   els.explorerEmpty.hidden = true;
@@ -308,19 +319,7 @@ async function renderExplorer() {
     return;
   }
 
-  let container;
-  if (explorerView === "carousel") {
-    container = renderCarousel(sorted);
-    if (!carouselItems.length) {
-      els.explorerStatus.textContent =
-        "Aucun jeu (.pce/.sgx/.rom/.bin) dans ce dossier — passez en vue liste pour tout voir.";
-      els.explorer.appendChild(container);
-      explorerBusy = false;
-      return;
-    }
-  } else {
-    container = explorerView === "list" ? renderList(sorted) : renderGrid(sorted);
-  }
+  const container = explorerView === "list" ? renderList(sorted) : renderGrid(sorted);
   els.explorer.appendChild(container);
   els.explorerStatus.textContent =
     `${sorted.length} élément(s) · ${explorerPath ? explorerPath : "racine"}`;
@@ -434,116 +433,214 @@ function renderList(sorted) {
   return table;
 }
 
-// ------------------------------------------------------------ vue carrousel
-// Pochettes (Libretro Thumbnails, cf. thumbnails.rs), style « coverflow »
-// (EmulationStation/Batocera) : un dossier ou fichier ROM connu par carte,
-// celle du centre mise en avant, les autres réduites/estompées de part et
-// d'autre — navigation aux flèches, au clic sur une carte latérale, ou au
-// clavier (←/→ pour déplacer le centre, Entrée pour l'activer). Les fichiers
-// qui ne sont ni un dossier ni une ROM connue (sauvegardes, images…) sont
-// omis de cette vue seulement, pas du dossier lui-même.
+// ------------------------------------------------------------ vue « Jeux »
+// Navigateur dédié en deux niveaux, ancré sur un dossier de base configurable
+// (persisté), indépendant du dossier courant de l'explorateur générique :
+//
+//   <dossier de base>/<Catégorie>/<ROM>          (ex. sd:/GAMES/Action/Jeu.pce)
+//
+// Niveau 1 (catégories) : liste colorée, gros texte façon borne d'arcade.
+// Niveau 2 (mosaïque) : grille de pochettes (Libretro Thumbnails) de la
+// catégorie choisie, clic -> fiche détaillée (Jouer/Télécharger).
 const boxartCache = new Map(); // nom de fichier -> data URI (ou null = introuvable)
-let carouselItems = [];
-let carouselIndex = 0;
+const GAMES_ROOT_KEY = "edlink.gamesRoot";
+const DEFAULT_GAMES_ROOT = "sd:/GAMES";
 
-function renderCarousel(sorted) {
-  if (explorerPath !== lastCarouselPath) { carouselIndex = 0; lastCarouselPath = explorerPath; }
-  carouselItems = sorted.filter((e) => e.is_dir || isRomFile(e));
-  if (carouselIndex >= carouselItems.length) {
-    carouselIndex = Math.max(0, carouselItems.length - 1);
-  }
-  return buildCarouselDom();
+function normalizeGamesPath(p) {
+  const t = (p || "").trim();
+  if (!t) return DEFAULT_GAMES_ROOT;
+  return /^sd:/i.test(t) ? t : "sd:/" + t.replace(/^\/+/, "");
 }
 
-function buildCarouselDom() {
+function getGamesRoot() {
+  try { return normalizeGamesPath(localStorage.getItem(GAMES_ROOT_KEY) || DEFAULT_GAMES_ROOT); }
+  catch { return DEFAULT_GAMES_ROOT; }
+}
+
+function saveGamesRoot(path) {
+  try { localStorage.setItem(GAMES_ROOT_KEY, path); } catch { /* stockage indisponible : tant pis, valeur en mémoire seulement */ }
+}
+
+let gamesRoot = getGamesRoot();
+let gamesLevel = "categories"; // "categories" | "mosaic"
+let gamesCategory = null;
+
+// Palette « très Recalbox » : chaque catégorie prend une couleur du cycle
+// (dégradé), indépendamment de son contenu — juste pour que la liste soit
+// vivante et que chaque rangée se reconnaisse au premier coup d'œil.
+const CATEGORY_PALETTE = [
+  ["#ff3d6a", "#ff8a3d"],
+  ["#22e0ff", "#2d6bff"],
+  ["#b14bff", "#ff2dd4"],
+  ["#3dff9a", "#12c2c2"],
+  ["#ffd23d", "#ff7a3d"],
+  ["#ff2dd4", "#8a3dff"],
+  ["#3dd6ff", "#3dff9a"],
+];
+
+function categoryIcon(name) {
+  const n = name.toLowerCase();
+  const rules = [
+    [/action|combat|beat|fight/, "⚔️"],
+    [/r\.?p\.?g|r[oô]le/, "🐉"],
+    [/plate|platform/, "🍄"],
+    [/sport/, "⚽"],
+    [/course|racing|voiture|moto/, "🏎️"],
+    [/puzzle|r[eé]flex/, "🧩"],
+    [/shoot|shmup|tir/, "🔫"],
+    [/arcade/, "🕹️"],
+    [/aventure|adventure/, "🗺️"],
+    [/strat/, "♟️"],
+    [/simu/, "🛠️"],
+  ];
+  for (const [re, icon] of rules) if (re.test(n)) return icon;
+  return "🎮";
+}
+
+async function renderGamesBrowser() {
+  const container = document.createElement("div");
+  container.className = "games-browser";
+
+  const bar = document.createElement("div");
+  bar.className = "games-topbar";
+  const rootLabel = document.createElement("span");
+  rootLabel.className = "games-root-label";
+  rootLabel.textContent = "📁 " + gamesRoot;
+  const gear = document.createElement("button");
+  gear.className = "btn ghost"; gear.textContent = "⚙ Changer le dossier de jeux";
+  gear.addEventListener("click", async () => {
+    const v = await askPrompt(
+      "Dossier de base des jeux sur la carte SD (une sous-catégorie par sous-dossier) :",
+      gamesRoot);
+    if (!v) return;
+    gamesRoot = normalizeGamesPath(v);
+    saveGamesRoot(gamesRoot);
+    gamesLevel = "categories";
+    renderExplorer();
+  });
+  bar.appendChild(rootLabel);
+  bar.appendChild(gear);
+  container.appendChild(bar);
+
+  container.appendChild(
+    gamesLevel === "mosaic" ? await buildMosaic() : await buildCategoryList()
+  );
+  return container;
+}
+
+function gamesError(message) {
+  const div = document.createElement("div");
+  div.className = "games-error";
+  div.textContent = message;
+  return div;
+}
+
+async function buildCategoryList() {
+  const entries = await safeInvoke("list_sd", { path: gamesRoot });
+  if (!entries) {
+    return gamesError(`Impossible de lister ${gamesRoot}. Vérifiez le dossier ou la connexion.`);
+  }
+  const dirs = entries.filter((e) => e.is_dir)
+    .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+  if (!dirs.length) {
+    return gamesError(
+      `Aucune catégorie dans ${gamesRoot} — créez un sous-dossier par type de jeu ` +
+      `(ex. Action, RPG, Plateforme…) et déposez vos ROM dedans.`);
+  }
+
+  const list = document.createElement("div");
+  list.className = "cat-list";
+  dirs.forEach((entry, i) => {
+    const [c1, c2] = CATEGORY_PALETTE[i % CATEGORY_PALETTE.length];
+    const row = document.createElement("div");
+    row.className = "cat-row";
+    row.style.background = `linear-gradient(120deg, ${c1}, ${c2})`;
+    const icon = document.createElement("div");
+    icon.className = "cat-icon";
+    icon.textContent = categoryIcon(entry.name);
+    const title = document.createElement("div");
+    title.className = "cat-title";
+    title.textContent = entry.name.toUpperCase();
+    const chev = document.createElement("div");
+    chev.className = "cat-chev";
+    chev.textContent = "›";
+    row.appendChild(icon);
+    row.appendChild(title);
+    row.appendChild(chev);
+    row.addEventListener("click", () => {
+      gamesCategory = entry.name;
+      gamesLevel = "mosaic";
+      renderExplorer();
+    });
+    list.appendChild(row);
+  });
+  return list;
+}
+
+async function buildMosaic() {
   const wrap = document.createElement("div");
-  wrap.className = "carousel-wrap";
 
-  const prev = document.createElement("button");
-  prev.className = "carousel-nav prev"; prev.textContent = "‹"; prev.title = "Précédent";
-  prev.disabled = carouselItems.length < 2;
-  prev.addEventListener("click", () => shiftCarousel(-1));
+  const header = document.createElement("div");
+  header.className = "mosaic-header";
+  const back = document.createElement("button");
+  back.className = "btn ghost"; back.textContent = "← Catégories";
+  back.addEventListener("click", () => { gamesLevel = "categories"; renderExplorer(); });
+  const title = document.createElement("h3");
+  title.className = "mosaic-title";
+  title.textContent = gamesCategory;
+  header.appendChild(back);
+  header.appendChild(title);
+  wrap.appendChild(header);
 
-  const next = document.createElement("button");
-  next.className = "carousel-nav next"; next.textContent = "›"; next.title = "Suivant";
-  next.disabled = carouselItems.length < 2;
-  next.addEventListener("click", () => shiftCarousel(1));
+  const catPath = joinSdPath(gamesRoot, gamesCategory);
+  const entries = await safeInvoke("list_sd", { path: catPath });
+  const status = document.createElement("div");
+  status.className = "mosaic-status";
+  wrap.appendChild(status);
 
-  const track = document.createElement("div");
-  track.className = "carousel-track";
+  if (!entries) {
+    status.textContent = `Impossible de lister ${catPath}.`;
+    return wrap;
+  }
+  const games = entries.filter(isRomFile)
+    .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+  status.textContent = games.length <= 1
+    ? `${games.length} jeu disponible`
+    : `${games.length} jeux disponibles`;
 
-  carouselItems.forEach((entry, i) => {
-    const offset = i - carouselIndex;
-    if (Math.abs(offset) > 2) return; // hors champ — pas la peine de le poser dans le DOM
-    const full = joinSdPath(explorerPath, entry.name);
-    const abs = Math.abs(offset);
+  if (!games.length) {
+    wrap.appendChild(gamesError(`Aucune ROM connue (.pce/.sgx/.rom/.bin) dans ${catPath}.`));
+    return wrap;
+  }
 
+  const grid = document.createElement("div");
+  grid.className = "mosaic-grid";
+  for (const entry of games) {
+    const full = joinSdPath(catPath, entry.name);
     const card = document.createElement("div");
-    card.className = "carousel-card" + (offset === 0 ? " active" : "");
-    const scale = offset === 0 ? 1 : abs === 1 ? 0.74 : 0.55;
-    const opacity = offset === 0 ? 1 : abs === 1 ? 0.8 : 0.45;
-    card.style.transform = `translate(-50%, -50%) translateX(${offset * 148}px) scale(${scale})`;
-    card.style.opacity = String(opacity);
-    card.style.zIndex = String(10 - abs);
-
+    card.className = "mosaic-card";
     const frame = document.createElement("div");
-    frame.className = "carousel-frame";
+    frame.className = "mosaic-frame";
     const ph = document.createElement("div");
     ph.className = "boxart-ph";
-    ph.textContent = entry.is_dir ? "📁" : "🎮";
+    ph.textContent = "🎮";
     frame.appendChild(ph);
     const label = document.createElement("div");
-    label.className = "carousel-label";
+    label.className = "mosaic-label";
     label.textContent = entry.name;
     card.appendChild(frame);
     card.appendChild(label);
-
-    card.addEventListener("click", () => {
-      if (offset !== 0) { carouselIndex = i; refreshCarouselDom(); return; }
-      if (entry.is_dir) { explorerPath = full; renderExplorer(); }
-      else openGameModal(entry, full);
+    card.addEventListener("click", () => openGameModal(entry, full));
+    card.addEventListener("contextmenu", (e) => {
+      e.preventDefault();
+      openCtxMenu(e.clientX, e.clientY, entry, full);
     });
-    if (!entry.is_dir) {
-      card.addEventListener("contextmenu", (e) => {
-        e.preventDefault();
-        openCtxMenu(e.clientX, e.clientY, entry, full);
-      });
-      loadBoxartInto(entry.name, frame);
-    }
-    track.appendChild(card);
-  });
-
-  wrap.appendChild(prev);
-  wrap.appendChild(track);
-  wrap.appendChild(next);
+    loadBoxartInto(entry.name, frame);
+    grid.appendChild(card);
+  }
+  wrap.appendChild(grid);
   return wrap;
 }
-
-function shiftCarousel(delta) {
-  if (!carouselItems.length) return;
-  carouselIndex = Math.max(0, Math.min(carouselItems.length - 1, carouselIndex + delta));
-  refreshCarouselDom();
-}
-
-// Reconstruit uniquement le carrousel (sans relister la carte) : navigation
-// instantanée aux flèches/clavier.
-function refreshCarouselDom() {
-  const old = els.explorer.querySelector(".carousel-wrap");
-  if (old) old.replaceWith(buildCarouselDom());
-}
-
-document.addEventListener("keydown", (e) => {
-  if (explorerView !== "carousel" || !$("tab-transfer").classList.contains("active")) return;
-  if (e.key === "ArrowLeft") { e.preventDefault(); shiftCarousel(-1); }
-  else if (e.key === "ArrowRight") { e.preventDefault(); shiftCarousel(1); }
-  else if (e.key === "Enter") {
-    const entry = carouselItems[carouselIndex];
-    if (!entry) return;
-    const full = joinSdPath(explorerPath, entry.name);
-    if (entry.is_dir) { explorerPath = full; renderExplorer(); }
-    else openGameModal(entry, full);
-  }
-});
 
 // Récupère la jaquette (cache mémoire -> commande Tauri, elle-même mise en
 // cache disque côté Rust) et l'insère dans `frame` si trouvée ; sinon laisse
@@ -621,6 +718,15 @@ function setView(v) {
   els.viewIcons.classList.toggle("active", v === "grid");
   els.viewList.classList.toggle("active", v === "list");
   els.viewCarousel.classList.toggle("active", v === "carousel");
+  // La vue « Jeux » a son propre navigateur (catégories/mosaïque), sans
+  // rapport avec le dossier courant de l'explorateur générique : la barre
+  // de navigation habituelle (fil d'Ariane, dossier parent, import) n'a pas
+  // de sens ici.
+  const isGames = v === "carousel";
+  els.crumbs.hidden = isGames;
+  els.explorerUp.hidden = isGames;
+  els.explorerImport.hidden = isGames;
+  if (isGames) gamesLevel = "categories"; // repart toujours des catégories en rouvrant la vue
   renderExplorer();
 }
 els.viewCarousel.addEventListener("click", () => setView("carousel"));

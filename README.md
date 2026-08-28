@@ -45,7 +45,7 @@ carte — le tout relié à la cartouche par **USB série** (CDC).
 | **Connexion** | Détection automatique du port série de la carte (ou choix manuel) |
 | **Infos carte** (`devinf`) | Nom, n° de série, versions, compteurs, tensions |
 | **Carte SD** (onglet) | Explorateur ; envoi (glisser‑déposer) et téléchargement de fichiers via le protocole FatFs de la carte, avec barre de progression ; clic droit sur un fichier → menu contextuel (Jouer, Renommer, Télécharger, Effacer) |
-| **Carrousel de pochettes** (vue 🎴 de l'onglet Carte SD) | Jaquettes des ROM via la base [Libretro Thumbnails](https://github.com/libretro-thumbnails) (nécessite Internet, mise en cache locale) ; clic → fiche détaillée (taille, capture en jeu) avec « Jouer » et « Télécharger » |
+| **Vue « Jeux » par catégorie** (🎴, onglet Carte SD) | Navigateur en deux niveaux ancré sur un dossier de base configurable (défaut `sd:/GAMES`, persisté) : liste colorée des sous-dossiers (catégories, ex. Action/RPG/Plateforme) façon Recalbox, puis mosaïque des ROM de la catégorie avec jaquette [Libretro Thumbnails](https://github.com/libretro-thumbnails) (nécessite Internet, mise en cache locale) ; clic sur un jeu → fiche détaillée (taille, capture en jeu) avec « Jouer » et « Télécharger » |
 | **Lancer un jeu** (`run`) | Déploie la ROM sur la SD (`sd:/usb-games/`) puis la lance |
 | **Reset** | Réinitialise la console |
 | **Capture d'écran** | Capture le menu de la carte (VRAM + palette → PNG) |
@@ -241,7 +241,13 @@ Reprend la palette « retrowave » de l'application.
   initial trouvé et corrigé : `CMD_F_DIR_RD` attend un argument `u16` non
   envoyé) — cf. `docs/PROTOCOL.md`. Fonctionne sur l'émulateur ; à
   reconfirmer sur matériel réel.
-- **Carrousel de pochettes** : correspondance par nom entre le fichier ROM
+- **Vue « Jeux »** : suppose une arborescence `<dossier de base>/<Catégorie>/<ROM>`
+  (ex. `sd:/GAMES/Action/Jeu.pce`) — un fichier posé directement dans le
+  dossier de base, sans sous-dossier catégorie, n'apparaît pas dans cette
+  vue (utiliser la vue Liste/Icônes pour tout voir). Le dossier de base est
+  mémorisé dans le stockage local du navigateur intégré (persiste entre
+  lancements de l'appli, propre à la machine).
+- **Jaquettes** : correspondance par nom entre le fichier ROM
   (souvent en convention GoodTools/TOSEC, ex. « Jeu (U).pce ») et la base
   Libretro (convention No-Intro, « Jeu (USA).png ») — best effort (quelques
   substitutions de code région), pas garanti pour tous les jeux. Nécessite
