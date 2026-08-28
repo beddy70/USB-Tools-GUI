@@ -249,19 +249,70 @@ async fn repo_index(cache_dir: &Path, repo: &str, folder: &str) -> Vec<String> {
     names
 }
 
-/// Similarité normalisée [0.0, 1.0] entre deux titres, insensible à la casse
-/// (distance de Levenshtein normalisée — `strsim`).
+/// « Ratio partiel » façon fuzzywuzzy/RapidFuzz : aligne la chaîne la plus
+/// courte sur la meilleure sous-fenêtre de la plus longue (quelques longueurs
+/// de fenêtre proches de `short`, pour absorber une petite variation en plus
+/// du décalage de position). Beaucoup de titres PC Engine japonais sont
+/// référencés côté Libretro avec le titre original ajouté en préfixe (ex.
+/// « Busou Keiji - Cyber Cross (Japan) » pour la ROM « Cyber Cross (J).pce ») :
+/// une distance de Levenshtein sur la chaîne entière s'effondre à cause de la
+/// longueur ajoutée, alors que le cœur du titre correspond exactement.
+fn partial_ratio(a: &str, b: &str) -> f64 {
+    let (short, long): (&str, &str) = if a.chars().count() <= b.chars().count() {
+        (a, b)
+    } else {
+        (b, a)
+    };
+    let short_len = short.chars().count();
+    let long_chars: Vec<char> = long.chars().collect();
+    let long_len = long_chars.len();
+    if short_len == 0 || long_len == 0 {
+        return 0.0;
+    }
+    if short_len >= long_len {
+        return strsim::normalized_levenshtein(short, long);
+    }
+
+    let mut best = 0.0f64;
+    let max_extra = 4usize.min(long_len - short_len);
+    for extra in 0..=max_extra {
+        let win_len = short_len + extra;
+        for start in 0..=(long_len - win_len) {
+            let window: String = long_chars[start..start + win_len].iter().collect();
+            let score = strsim::normalized_levenshtein(short, &window);
+            if score > best {
+                best = score;
+            }
+        }
+    }
+    best
+}
+
+/// Similarité [0.0, 1.0] entre deux titres, insensible à la casse : le
+/// meilleur des deux entre la distance de Levenshtein sur la chaîne entière
+/// (titres proches globalement) et le ratio partiel (titre entièrement
+/// contenu dans l'autre, préfixe/suffixe différent).
 fn similarity(a: &str, b: &str) -> f64 {
-    strsim::normalized_levenshtein(&a.to_lowercase(), &b.to_lowercase())
+    let a = a.to_lowercase();
+    let b = b.to_lowercase();
+    strsim::normalized_levenshtein(&a, &b).max(partial_ratio(&a, &b))
 }
 
 /// Le titre le plus proche de `stem` dans `candidates`, si son score dépasse
-/// [`FUZZY_THRESHOLD`].
+/// [`FUZZY_THRESHOLD`]. Essaie aussi les variantes de région de `stem`
+/// ([`name_variants`]) : un stem exprimé en code court (« (J) ») se compare
+/// souvent mieux une fois étendu (« (Japan) »), la base Libretro utilisant
+/// systématiquement la forme longue.
 fn best_fuzzy_match(stem: &str, candidates: &[String]) -> Option<(String, f64)> {
-    candidates
+    name_variants(stem)
         .iter()
-        .map(|c| (c.clone(), similarity(stem, c)))
-        .filter(|(_, score)| *score >= FUZZY_THRESHOLD)
+        .filter_map(|variant| {
+            candidates
+                .iter()
+                .map(|c| (c.clone(), similarity(variant, c)))
+                .filter(|(_, score)| *score >= FUZZY_THRESHOLD)
+                .max_by(|a, b| a.1.total_cmp(&b.1))
+        })
         .max_by(|a, b| a.1.total_cmp(&b.1))
 }
 
@@ -355,6 +406,21 @@ mod tests {
         let m = m.expect("attendu : correspondance approchée trouvée");
         assert!(m.score < 1.0);
         assert!(m.score >= FUZZY_THRESHOLD);
+        println!("matched: {} ({:.0}%)", m.matched_title, m.score * 100.0);
+    }
+
+    // Cas signalé : titre japonais original ajouté en préfixe côté Libretro
+    // (« Busou Keiji - Cyber Cross (Japan) » pour « Cyber Cross (J).pce »),
+    // que la seule distance de Levenshtein sur la chaîne entière ne trouvait
+    // pas (score écrasé par la longueur du préfixe ajouté).
+    #[test]
+    #[ignore]
+    fn fetch_fuzzy_fallback_prefixed_title() {
+        let dir = std::env::temp_dir().join("edlink-thumb-test-fuzzy-prefixed");
+        let _ = std::fs::remove_dir_all(&dir);
+        let m = tauri::async_runtime::block_on(fetch(&dir, "Cyber Cross (J).pce", Kind::Boxart));
+        let m = m.expect("attendu : correspondance approchée trouvée malgré le préfixe");
+        assert!(m.matched_title.contains("Cyber Cross"));
         println!("matched: {} ({:.0}%)", m.matched_title, m.score * 100.0);
     }
 }

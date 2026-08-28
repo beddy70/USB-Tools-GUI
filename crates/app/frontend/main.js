@@ -726,10 +726,16 @@ async function loadBoxartInto(romName, frame, seq) {
   const img = document.createElement("img");
   img.src = cached.dataUri;
   img.alt = romName;
-  if (cached.score < 1) {
-    img.title = `Pochette approchée (${Math.round(cached.score * 100)}%) : ${cached.matchedTitle}`;
-  }
   frame.replaceChildren(img);
+  if (cached.score < 1) {
+    const pct = Math.round(cached.score * 100);
+    img.title = `Pochette approchée (${pct}%) : ${cached.matchedTitle}`;
+    const badge = document.createElement("div");
+    badge.className = "mosaic-scorebadge" + (cached.score < 0.9 ? " low" : "");
+    badge.textContent = pct + "%";
+    badge.title = img.title;
+    frame.appendChild(badge);
+  }
 }
 
 let gameModalTarget = null; // { entry, full }
