@@ -335,7 +335,11 @@ fn delete_sd(state: State<'_, AppState>, path: String) -> Result<String, String>
 }
 
 /// Renomme un fichier de la carte SD (reste dans le même dossier).
-#[tauri::command]
+///
+/// `rename_all = "snake_case"` : voir la note sur `save_png` — sans elle,
+/// Tauri attend `newName` (camelCase) côté JS au lieu de `new_name`, et
+/// l'appel échoue silencieusement (argument manquant).
+#[tauri::command(rename_all = "snake_case")]
 fn rename_sd(state: State<'_, AppState>, path: String, new_name: String) -> Result<String, String> {
     let old = normalize_sd_path(&path);
     let parent = old.rsplit_once('/').map(|(p, _)| p).unwrap_or("sd:");

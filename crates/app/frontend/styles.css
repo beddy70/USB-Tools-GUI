@@ -163,6 +163,19 @@ button.btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; box-s
 .entry:hover .dlbtn { opacity: 1; }
 .entry .dlbtn:hover { border-color: var(--cyan); background: var(--panel-2); }
 
+/* Modale générique (confirmation / saisie) */
+.modal-backdrop { position: fixed; inset: 0; z-index: 600; display: flex;
+  align-items: center; justify-content: center; background: rgba(6,5,15,0.65);
+  backdrop-filter: blur(2px); }
+.modal-backdrop[hidden] { display: none; }
+.modal-box { min-width: 320px; max-width: 440px; padding: 20px; background: var(--panel);
+  border: 1px solid var(--border); border-radius: 12px;
+  box-shadow: 0 20px 50px rgba(0,0,0,0.5), 0 0 0 1px rgba(34,224,255,0.08); }
+.modal-msg { color: var(--text); font-size: 14px; line-height: 1.5; margin-bottom: 14px;
+  white-space: pre-line; }
+.modal-input { width: 100%; margin-bottom: 16px; }
+.modal-actions { display: flex; justify-content: flex-end; gap: 10px; }
+
 /* Menu contextuel (clic droit sur un fichier de l'explorateur) */
 .ctxmenu { position: fixed; z-index: 500; min-width: 180px; padding: 6px;
   background: var(--panel); border: 1px solid var(--border); border-radius: 10px;

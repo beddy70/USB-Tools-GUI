@@ -12,6 +12,8 @@ const els = {
   explorerStatus: $("explorer-status"),
   explorerUp: $("explorer-up"), explorerRefresh: $("explorer-refresh"), explorerImport: $("explorer-import"),
   sdCtxMenu: $("sd-ctxmenu"),
+  modal: $("app-modal"), modalMsg: $("modal-msg"), modalInput: $("modal-input"),
+  modalOk: $("modal-ok"), modalCancel: $("modal-cancel"),
   transferBar: $("transfer-bar"), transferLabel: $("transfer-label"),
   transferPct: $("transfer-pct"), transferFill: $("transfer-fill"),
   viewIcons: $("view-icons"), viewList: $("view-list"),
@@ -23,6 +25,51 @@ const els = {
   scrollXVal: $("scroll-x-val"), scrollYVal: $("scroll-y-val"),
   log: $("log"),
 };
+
+// ------------------------------------------------------------- modale
+// Remplace confirm()/prompt() natifs : pas fiables dans une WebView
+// embarquée (Tauri/WebView2/WKWebView n'affichent pas toujours ces
+// dialogues sans implémentation hôte dédiée — cause probable du menu
+// contextuel « Renommer »/« Effacer » sans effet visible). Une seule
+// instance à la fois ; `resolveModal` referme la précédente si besoin.
+let resolveModal = null;
+function closeModal(result) {
+  els.modal.hidden = true;
+  if (resolveModal) { const r = resolveModal; resolveModal = null; r(result); }
+}
+els.modal.addEventListener("click", (e) => { if (e.target === els.modal) closeModal(false); });
+els.modalCancel.addEventListener("click", () => closeModal(false));
+els.modalOk.addEventListener("click", () => {
+  closeModal(els.modalInput.hidden ? true : els.modalInput.value);
+});
+els.modalInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") { e.preventDefault(); els.modalOk.click(); }
+  else if (e.key === "Escape") closeModal(false);
+});
+
+/** Remplace `confirm()`. Résout `true`/`false`. */
+function askConfirm(message) {
+  if (resolveModal) closeModal(false);
+  els.modalMsg.textContent = message;
+  els.modalInput.hidden = true;
+  els.modal.hidden = false;
+  els.modalOk.focus();
+  return new Promise((resolve) => { resolveModal = resolve; });
+}
+
+/** Remplace `prompt()`. Résout la valeur saisie, ou `null` si annulé. */
+function askPrompt(message, defaultValue = "") {
+  if (resolveModal) closeModal(false);
+  els.modalMsg.textContent = message;
+  els.modalInput.hidden = false;
+  els.modalInput.value = defaultValue;
+  els.modal.hidden = false;
+  els.modalInput.focus();
+  els.modalInput.select();
+  return new Promise((resolve) => {
+    resolveModal = (v) => resolve(v === false ? null : v);
+  });
+}
 
 // État de l'explorateur de carte SD.
 let explorerPath = "";   // chemin SD courant ("" = racine)
@@ -479,14 +526,15 @@ els.sdCtxMenu.addEventListener("click", async (e) => {
   } else if (action === "download") {
     doDownloadSd(full);
   } else if (action === "delete") {
-    if (!confirm(`Effacer « ${entry.name} » de la carte SD ? Cette action est irréversible.`)) return;
+    const ok = await askConfirm(`Effacer « ${entry.name} » de la carte SD ?\nCette action est irréversible.`);
+    if (!ok) return;
     const res = await safeInvoke("delete_sd", { path: full });
     if (res !== null) {
       log(`✔ ${entry.name} effacé`, "ok");
       renderExplorer();
     }
   } else if (action === "rename") {
-    const newName = prompt("Nouveau nom :", entry.name);
+    const newName = await askPrompt("Nouveau nom :", entry.name);
     if (!newName || newName === entry.name) return;
     const res = await safeInvoke("rename_sd", { path: full, new_name: newName });
     if (res !== null) {
@@ -1222,10 +1270,11 @@ $("save-screen").addEventListener("click", async () => {
     // respire entre chaque) et on prévient l'utilisateur.
     if (readMode !== "emu") {
       const secs = Math.ceil(SIZE / 90000); // ~90 Ko/s utiles
-      if (!confirm(
+      const ok = await askConfirm(
         `Enregistrer ${cur.label} (${fmtSize(SIZE)}) demande de lire toute la zone ` +
         `sur la carte : la console va saccader pendant ~${secs} s et le jeu en ` +
-        `cours peut planter. Continuer ?`)) return;
+        `cours peut planter. Continuer ?`);
+      if (!ok) return;
     }
 
     const path = await safeInvoke("pick_save", { default_name: defaultName });
