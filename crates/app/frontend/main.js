@@ -885,7 +885,13 @@ document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeCtxMe
 
 async function playSd(entry, full) {
   log(`Lancement de ${entry.name}…`);
-  const res = await safeInvoke("run_rom", { rom: "sd:/" + full });
+  // `full` est déjà préfixé "sd:" quand cette fonction est appelée depuis
+  // l'onglet GAMES (chemins construits à partir de gamesRoot, ex.
+  // "sd:/GAMES/Action/Jeu.pce"), mais pas depuis le menu contextuel de
+  // l'explorateur Carte SD (chemins relatifs à explorerPath, sans préfixe) —
+  // ne préfixer que si besoin, sous peine d'un "sd:/sd:/..." invalide.
+  const rom = /^sd:/i.test(full) ? full : "sd:/" + full;
+  const res = await safeInvoke("run_rom", { rom });
   if (res && !res.isErr) log("Jeu lancé ✔", "ok");
 }
 
