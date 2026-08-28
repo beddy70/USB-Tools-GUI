@@ -245,6 +245,7 @@
             <label class="spr-check"><input type="checkbox" id="spr-grid" checked /> Grille</label>
             <label class="spr-check"><input type="checkbox" id="spr-transp" checked /> Index 0 transparent</label>
             <button class="btn ghost" id="spr-refresh">🔄 Capturer</button>
+            <button class="btn ghost" id="spr-lock" title="N'afficher que la sélection (recadre la vue)" disabled>🔒 Locker</button>
             <button class="btn ghost" id="spr-clear-sel" title="Effacer la sélection (Échap)">✕ Sélection</button>
             <button class="btn ghost" id="spr-save">💾 PNG…</button>
           </div>
@@ -252,8 +253,11 @@
           <p class="hint" style="margin-bottom:8px">
             Cliquez une cellule, ou <strong>glissez</strong> pour sélectionner une
             plage — l'export PNG n'enregistre alors que la sélection.
-            <span class="mono">Échap</span> ou « ✕ Sélection » l'efface (export
-            de toute la planche).
+            <strong>🔒 Locker</strong> recadre la vue sur la seule sélection (le
+            reste de la VRAM n'est plus affiché — pratique pour « 🔄 Capturer »
+            en boucle sur un même sprite, ex. une animation).
+            <span class="mono">Échap</span> ou « ✕ Sélection » efface tout
+            (et déverrouille).
           </p>
           <div class="spr-info" id="spr-info">Aucune cellule sélectionnée.</div>
 

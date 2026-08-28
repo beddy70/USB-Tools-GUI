@@ -48,7 +48,7 @@ carte — le tout relié à la cartouche par **USB série** (CDC).
 | **Reset** | Réinitialise la console |
 | **Capture d'écran** | Capture le menu de la carte (VRAM + palette → PNG) |
 | **Visualiseur mémoire** (lecture seule) | RAM HuCard via `memrd` ; VRAM/CRAM via l'instantané `*v` du menu |
-| **Sprites / tuiles VRAM** | Planche de cellules 4 bpp décodées de la VRAM : 8×8 (fond) ou les 6 tailles de sprite du VDC (16×16 à 32×64), choix de palette, zoom, clic (ou glisser pour une plage) → adresse VRAM + n° de pattern, export PNG de la planche ou de la seule sélection |
+| **Sprites / tuiles VRAM** | Planche de cellules 4 bpp décodées de la VRAM : 8×8 (fond) ou les 6 tailles de sprite du VDC (16×16 à 32×64), choix de palette, zoom, clic (ou glisser pour une plage) → adresse VRAM + n° de pattern ; « 🔒 Locker » recadre la vue sur la seule sélection ; export PNG de la planche ou de la seule sélection |
 
 ## Architecture
 
@@ -185,8 +185,11 @@ réinitialise son état par session. Commandes utiles :
    taille de cellule (8×8 fond, ou 16×16 à 32×64 pour les 6 tailles de sprite
    du VDC), la palette et le zoom ; cliquez une cellule pour son adresse VRAM
    et son n° de pattern, ou **glissez** pour sélectionner une plage — l'export
-   PNG n'enregistre alors que la zone choisie (« ✕ Sélection » ou <kbd>Échap</kbd>
-   pour revenir à toute la planche).
+   PNG n'enregistre alors que la zone choisie. « 🔒 Locker » recadre la vue sur
+   cette seule sélection (le reste de la VRAM disparaît) : pratique pour
+   surveiller un même sprite au fil de « 🔄 Capturer » (ex. une animation).
+   « ✕ Sélection » ou <kbd>Échap</kbd> efface tout et revient à la planche
+   complète.
 
 ## Vérification matérielle
 

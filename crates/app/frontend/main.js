@@ -1182,6 +1182,7 @@ $("save-screen").addEventListener("click", async () => {
   let geom = null;         // { spec, cw, ch, cols, rows, total, W, H, wordsPerCell }
   let selA = null, selB = null; // coins (cx,cy) de la sélection (glisser) ; null = aucune
   let dragging = false;
+  let locked = false;      // true : la vue est recadrée sur la seule sélection
   let capturing = false;
 
   // Les 6 tailles de sprite du VDC (16×16 à 32×64), + la tuile de fond 8×8.
@@ -1290,9 +1291,31 @@ $("save-screen").addEventListener("click", async () => {
     }
     const z = +elZoom.value;
     elZoomVal.textContent = z + "×";
+    ctx.imageSmoothingEnabled = false;
+    const r = selRect();
+
+    // Vue verrouillée : la planche disparaît, seule la sélection est recadrée
+    // et affichée — plus rien d'autre de la VRAM n'est visible.
+    if (locked && r) {
+      const wCells = r.x1 - r.x0 + 1, hCells = r.y1 - r.y0 + 1;
+      const sw = wCells * geom.cw, sh = hCells * geom.ch;
+      cv.width = sw * z; cv.height = sh * z;
+      ctx.clearRect(0, 0, cv.width, cv.height);
+      ctx.drawImage(sheet, r.x0 * geom.cw, r.y0 * geom.ch, sw, sh, 0, 0, cv.width, cv.height);
+      if (elGrid.checked && z >= 2) {
+        ctx.strokeStyle = "rgba(255,255,255,0.18)";
+        ctx.lineWidth = 1;
+        const sx = geom.cw * z, sy = geom.ch * z;
+        ctx.beginPath();
+        for (let gx = 0; gx <= wCells; gx++) { ctx.moveTo(gx * sx + 0.5, 0); ctx.lineTo(gx * sx + 0.5, cv.height); }
+        for (let gy = 0; gy <= hCells; gy++) { ctx.moveTo(0, gy * sy + 0.5); ctx.lineTo(cv.width, gy * sy + 0.5); }
+        ctx.stroke();
+      }
+      return;
+    }
+
     cv.width = geom.W * z;
     cv.height = geom.H * z;
-    ctx.imageSmoothingEnabled = false;
     ctx.clearRect(0, 0, cv.width, cv.height);
     ctx.drawImage(sheet, 0, 0, cv.width, cv.height);
 
@@ -1305,7 +1328,6 @@ $("save-screen").addEventListener("click", async () => {
       for (let gy = 0; gy <= geom.rows; gy++) { ctx.moveTo(0, gy * sy + 0.5); ctx.lineTo(cv.width, gy * sy + 0.5); }
       ctx.stroke();
     }
-    const r = selRect();
     if (r) {
       const sx = geom.cw * z, sy = geom.ch * z;
       const rx = r.x0 * sx, ry = r.y0 * sy, rw = (r.x1 - r.x0 + 1) * sx, rh = (r.y1 - r.y0 + 1) * sy;
@@ -1329,8 +1351,9 @@ $("save-screen").addEventListener("click", async () => {
   function updateStatus() {
     if (!geom) { elStatus.textContent = ""; return; }
     const label = geom.spec.bg ? "8×8" : `${geom.spec.w}×${geom.spec.h}`;
+    const lockNote = locked ? "🔒 Vue verrouillée sur la sélection — le reste de la VRAM est masqué. " : "";
     elStatus.textContent =
-      `${geom.total} cellules ${label} · ${geom.cols}×${geom.rows} · VRAM 64 Ko`;
+      lockNote + `${geom.total} cellules ${label} · ${geom.cols}×${geom.rows} · VRAM 64 Ko`;
   }
 
   // Rectangle de sélection normalisé (coordonnées de cellule, incluses), ou
@@ -1357,8 +1380,27 @@ $("save-screen").addEventListener("click", async () => {
 
   function clearSelection() {
     selA = null; selB = null;
+    locked = false;
+    updateLockUI();
     updateSelInfo();
+    updateStatus();
     paint();
+  }
+
+  function setLocked(v) {
+    if (v && !selRect()) return; // rien à verrouiller
+    locked = v;
+    updateLockUI();
+    updateStatus();
+    paint();
+  }
+
+  function updateLockUI() {
+    const btn = $("spr-lock");
+    if (!btn) return;
+    btn.disabled = !selRect();
+    btn.textContent = locked ? "🔓 Déverrouiller" : "🔒 Locker";
+    btn.classList.toggle("active", locked);
   }
 
   function idxOf(cx, cy) { return cy * geom.cols + cx; }
@@ -1427,24 +1469,30 @@ $("save-screen").addEventListener("click", async () => {
   [elZoom, elGrid].forEach((el) => el.addEventListener("input", paint));
 
   // Clic = cellule unique ; glisser = plage rectangulaire (limitera l'export PNG).
+  // Désactivé en vue verrouillée (les coordonnées du canvas ne correspondent
+  // plus à la grille entière) — déverrouillez d'abord pour changer la sélection.
   cv.addEventListener("mousedown", (e) => {
+    if (locked) return;
     const c = cellAt(e.clientX, e.clientY);
     if (!c) return;
     dragging = true;
     selA = c; selB = c;
     updateSelInfo();
+    updateLockUI();
     paint();
   });
   window.addEventListener("mousemove", (e) => {
-    if (!dragging) return;
+    if (!dragging || locked) return;
     const c = cellAt(e.clientX, e.clientY);
     if (!c) return;
     selB = c;
     updateSelInfo();
+    updateLockUI();
     paint();
   });
   window.addEventListener("mouseup", () => { dragging = false; });
 
+  $("spr-lock").addEventListener("click", () => setLocked(!locked));
   $("spr-clear-sel").addEventListener("click", clearSelection);
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && $("tab-sprites")?.classList.contains("active")) clearSelection();

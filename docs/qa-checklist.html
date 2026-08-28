@@ -1,0 +1,487 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Grille de test — Turbo Everdrive USB Tools GUI</title>
+<style>
+  :root {
+    --bg: #f4f5f9; --panel: #ffffff; --border: #d8dbe6; --text: #1c1e2b; --muted: #6b7086;
+    --accent: #2d6cdf; --accent-2: #7b3fe4; --ok: #1f9d55; --ok-bg: #e7f8ee;
+    --bad: #d1393f; --bad-bg: #fdeceb; --na: #8a8f9e; --na-bg: #eef0f4;
+    --todo-bg: #fffdf3; --todo-border: #ecdf9a;
+    --mono: "SFMono-Regular", Consolas, Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14151f; --panel: #1c1e2b; --border: #333549; --text: #eef0f8; --muted: #9a9fb5;
+      --accent: #5b96f7; --accent-2: #a988ff; --ok: #3ddc84; --ok-bg: #123321;
+      --bad: #ff6b6f; --bad-bg: #3a1616; --na: #8a8f9e; --na-bg: #23253a;
+      --todo-bg: #262616; --todo-border: #4a4325;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  body { padding: 0 0 60px; }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 0 20px; }
+
+  header.top { background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #fff;
+    padding: 28px 0 22px; margin-bottom: 22px; }
+  header.top h1 { margin: 0 0 4px; font-size: 22px; }
+  header.top p { margin: 0; opacity: .9; font-size: 13.5px; }
+
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+    padding: 18px 20px; margin-bottom: 18px; }
+  h2 { font-size: 15px; text-transform: uppercase; letter-spacing: .5px; color: var(--accent);
+    margin: 0 0 14px; }
+  h2 .n { color: var(--muted); text-transform: none; letter-spacing: 0; font-weight: 400; }
+
+  .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; }
+  label.field { display: flex; flex-direction: column; gap: 5px; font-size: 12.5px; color: var(--muted); }
+  input[type=text], input[type=date], select, textarea {
+    font: inherit; font-size: 13.5px; padding: 8px 10px; border-radius: 7px;
+    border: 1px solid var(--border); background: var(--bg); color: var(--text); width: 100%;
+  }
+  input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  textarea { resize: vertical; min-height: 70px; font-family: inherit; }
+
+  /* barre de progression sticky */
+  .progress-bar { position: sticky; top: 0; z-index: 20; background: var(--panel);
+    border-bottom: 1px solid var(--border); padding: 10px 0; margin-bottom: 4px;
+    box-shadow: 0 2px 10px rgba(0,0,0,.06); }
+  .progress-inner { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .progress-track { flex: 1 1 220px; height: 10px; border-radius: 6px; background: var(--na-bg);
+    overflow: hidden; display: flex; min-width: 160px; }
+  .progress-track div { height: 100%; }
+  .seg-ok { background: var(--ok); } .seg-bad { background: var(--bad); }
+  .seg-na { background: var(--na); } .seg-todo { background: transparent; }
+  .progress-counts { font-size: 12.5px; color: var(--muted); white-space: nowrap; }
+  .progress-counts b { color: var(--text); }
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  button { font: inherit; font-size: 13px; padding: 8px 14px; border-radius: 7px; border: 1px solid var(--border);
+    background: var(--panel); color: var(--text); cursor: pointer; }
+  button:hover { border-color: var(--accent); color: var(--accent); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.primary:hover { filter: brightness(1.08); color: #fff; }
+  button.ghost-danger { color: var(--bad); }
+  button.ghost-danger:hover { border-color: var(--bad); color: var(--bad); }
+
+  table.tests { width: 100%; border-collapse: collapse; }
+  table.tests th { text-align: left; font-size: 11.5px; text-transform: uppercase; letter-spacing: .4px;
+    color: var(--muted); padding: 6px 8px; border-bottom: 1px solid var(--border); }
+  table.tests td { padding: 7px 8px; border-bottom: 1px solid var(--border); vertical-align: middle; font-size: 13.5px; }
+  table.tests tr.row-ok td { background: var(--ok-bg); }
+  table.tests tr.row-bad td { background: var(--bad-bg); }
+  table.tests tr.row-na td { background: var(--na-bg); }
+  .col-status { width: 130px; }
+  .col-comment { width: 34%; }
+  .row-fn b.section-tag { display: block; font-size: 10.5px; color: var(--muted); font-weight: 600;
+    text-transform: uppercase; letter-spacing: .3px; margin-bottom: 1px; }
+  select.status { width: 100%; font-weight: 600; }
+  select.status[data-v="ok"] { color: var(--ok); }
+  select.status[data-v="bad"] { color: var(--bad); }
+  select.status[data-v="na"] { color: var(--na); }
+  input.comment { width: 100%; }
+
+  details.section-toggle { margin-bottom: 4px; }
+  details.section-toggle > summary { cursor: pointer; font-size: 13px; color: var(--muted); padding: 4px 0; }
+
+  .output-panel textarea { min-height: 340px; font-family: var(--mono); font-size: 12px; white-space: pre; }
+  .output-actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; align-items: center; }
+  .copied-flag { font-size: 12.5px; color: var(--ok); opacity: 0; transition: opacity .2s; }
+  .copied-flag.show { opacity: 1; }
+
+  footer { text-align: center; color: var(--muted); font-size: 12px; padding: 24px 0 0; }
+
+  @media print {
+    .progress-bar, .actions, .output-panel, button { display: none !important; }
+    body { padding: 0; }
+  }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <h1>🕹️ Grille de test — Turbo Everdrive USB Tools GUI</h1>
+    <p>Validation sur matériel réel · remplissez, cliquez « Générer le Markdown », copiez dans l'e-mail.</p>
+  </div>
+</header>
+
+<div class="progress-bar">
+  <div class="wrap progress-inner">
+    <div class="progress-track" id="progressTrack"></div>
+    <div class="progress-counts" id="progressCounts">0 / 0 renseignés</div>
+    <div class="actions">
+      <button class="primary" id="btnGenerate">📝 Générer le Markdown</button>
+      <button class="ghost-danger" id="btnReset">↺ Réinitialiser</button>
+    </div>
+  </div>
+</div>
+
+<div class="wrap">
+
+  <div class="card">
+    <h2>Informations de test</h2>
+    <div class="meta-grid">
+      <label class="field">Testeur
+        <input type="text" id="mTester" placeholder="Prénom Nom" />
+      </label>
+      <label class="field">Date
+        <input type="date" id="mDate" />
+      </label>
+      <label class="field">Modèle de carte
+        <select id="mModel">
+          <option value="">—</option>
+          <option>Turbo EverDrive Pro</option>
+          <option>Turbo EverDrive Core</option>
+        </select>
+      </label>
+      <label class="field">Version testée
+        <input type="text" id="mVersion" placeholder="ex: v0.1.1-alpha · 4a96f24 (bas de la barre latérale de l'appli)" />
+      </label>
+      <label class="field">Port de connexion
+        <input type="text" id="mPort" placeholder="ex: COM3" />
+      </label>
+      <label class="field">Système Windows
+        <input type="text" id="mOs" placeholder="ex: Windows 11 23H2" />
+      </label>
+      <label class="field" style="grid-column: 1 / -1">ROM(s) utilisée(s) pour les tests
+        <input type="text" id="mRoms" placeholder="ex: Bonk's Adventure (U).pce" />
+      </label>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Tests <span class="n">— cliquez le statut de chaque ligne, ajoutez un commentaire si besoin</span></h2>
+    <table class="tests">
+      <thead>
+        <tr>
+          <th class="col-status">Validé</th>
+          <th>Fonction</th>
+          <th class="col-comment">Commentaire</th>
+        </tr>
+      </thead>
+      <tbody id="rowsBody"></tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>Notes générales</h2>
+    <textarea id="mNotes" placeholder="Impressions générales, bugs non couverts par la grille, suggestions…"></textarea>
+  </div>
+
+  <div class="card output-panel" id="outputCard" hidden>
+    <h2>Markdown généré <span class="n">— copiez-collez dans votre e-mail</span></h2>
+    <textarea id="mdOutput" readonly></textarea>
+    <div class="output-actions">
+      <button class="primary" id="btnCopy">📋 Copier dans le presse-papiers</button>
+      <button id="btnDownload">💾 Télécharger le .md</button>
+      <span class="copied-flag" id="copiedFlag">Copié ✔</span>
+    </div>
+  </div>
+
+  <footer>Fichier local — aucune donnée n'est envoyée nulle part. Sauvegarde automatique dans ce navigateur.</footer>
+</div>
+
+<script>
+(() => {
+  "use strict";
+
+  // ---------------------------------------------------------------- données
+  const SECTIONS = {
+    connexion: "Connexion",
+    sd: "Carte SD",
+    jouer: "Jouer",
+    memoire: "Mémoire",
+    sprites: "Sprites",
+    general: "Général",
+  };
+
+  const TESTS = [
+    ["connexion", "Détection automatique du port (scan) — pas besoin de saisie manuelle"],
+    ["connexion", "Connexion affiche nom, port et infos carte (devinf)"],
+    ["connexion", "Déconnexion propre puis reconnexion possible"],
+    ["connexion", "Message d'erreur compréhensible si mauvais port / carte non alimentée"],
+
+    ["sd", "L'arborescence de la racine de la carte SD s'affiche correctement"],
+    ["sd", "Navigation dans un sous-dossier"],
+    ["sd", "Remonter au dossier parent (bouton ⬆)"],
+    ["sd", "Bascule vue icônes / liste"],
+    ["sd", "Upload par glisser-déposer, avec barre de progression"],
+    ["sd", "Upload via le bouton « 📂 Importer… »"],
+    ["sd", "Téléchargement d'un fichier (double-clic ou ⬇), sélecteur de destination + barre de progression"],
+    ["sd", "Les tailles de fichiers affichées sont correctes"],
+    ["sd", "La liste se rafraîchit après un envoi / téléchargement"],
+
+    ["jouer", "« ▶ Choisir et lancer… » déploie puis lance une ROM"],
+    ["jouer", "Le jeu se lance réellement sur la console"],
+    ["jouer", "Reset console retourne bien au menu de la carte"],
+    ["jouer", "Capture d'écran (📷) affiche une image correcte du menu"],
+    ["jouer", "Bouger les curseurs (BAT / résolution / défilement) réagit instantanément, sans lenteur"],
+    ["jouer", "Enregistrer le PNG de la capture (sélecteur de fichier, fichier bien créé)"],
+
+    ["memoire", "Ouvrir l'onglet Mémoire ne lit rien automatiquement (bandeau d'avertissement visible)"],
+    ["memoire", "« 🔄 Rafraîchir » charge la zone visible sans geler longtemps la console"],
+    ["memoire", "Défiler dans la RAM après un Rafraîchir affiche des données cohérentes"],
+    ["memoire", "Recherche hexadécimale / texte (dans les zones déjà chargées)"],
+    ["memoire", "« 💾 Sauver… » (dump complet) demande confirmation, progresse par blocs, sans planter la console"],
+    ["memoire", "Vue VRAM (instantané via le menu) correcte, menu affiché"],
+    ["memoire", "Vue CRAM (instantané via le menu) correcte, menu affiché"],
+    ["memoire", "VRAM/CRAM : message d'erreur clair (pas de blocage de l'appli) si un jeu tourne"],
+
+    ["sprites", "Ouvrir l'onglet Sprites capture un instantané (menu affiché)"],
+    ["sprites", "Tuiles 8×8 (fond) cohérentes à l'affichage"],
+    ["sprites", "Sprites 16×16 corrects (comparer avec un jeu connu)"],
+    ["sprites", "Tailles composites 16×32 à 32×64 correctement assemblées"],
+    ["sprites", "Changer de palette (0–31) change bien les couleurs affichées"],
+    ["sprites", "Cliquer une cellule affiche son adresse VRAM / n° de pattern"],
+    ["sprites", "Glisser sélectionne une plage rectangulaire (zone hors sélection assombrie)"],
+    ["sprites", "« 🔒 Locker » recadre la vue sur la seule sélection (reste de la VRAM masqué)"],
+    ["sprites", "« 🔓 Déverrouiller » revient à la planche complète, sélection conservée"],
+    ["sprites", "« ✕ Sélection » ou la touche Échap efface la sélection (et déverrouille)"],
+    ["sprites", "Export PNG de la planche entière (sélecteur de fichier, fichier valide à l'ouverture)"],
+    ["sprites", "Export PNG de la sélection uniquement (ne contient que la zone choisie)"],
+    ["sprites", "« 🔄 Capturer » conserve la sélection et le verrouillage actifs (ne les efface pas)"],
+
+    ["general", "La version affichée (bas de la barre latérale) correspond à la version reçue"],
+    ["general", "Aucun plantage de l'application pendant toute la session de test"],
+    ["general", "Aucun gel prolongé ni plantage de la console PC-Engine"],
+    ["general", "Les messages d'erreur affichés sont compréhensibles (pas de jargon technique)"],
+  ].map((t, i) => ({ id: "t" + i, cat: t[0], label: t[1] }));
+
+  const STORAGE_KEY = "ted-qa-checklist-v1";
+
+  // ---------------------------------------------------------------- état
+  let state = { meta: {}, notes: "", rows: {} };
+
+  function loadState() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const saved = JSON.parse(raw);
+        if (saved && typeof saved === "object") state = Object.assign(state, saved);
+      }
+    } catch (_) { /* stockage indisponible : on continue sans persistance */ }
+  }
+  function saveState() {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (_) {}
+  }
+
+  // ---------------------------------------------------------------- DOM
+  const $ = (id) => document.getElementById(id);
+  const metaFields = ["mTester", "mDate", "mModel", "mVersion", "mPort", "mOs", "mRoms"];
+  const rowsBody = $("rowsBody");
+
+  function buildRows() {
+    let lastCat = null;
+    for (const t of TESTS) {
+      if (t.cat !== lastCat) {
+        lastCat = t.cat;
+        const tr = document.createElement("tr");
+        const td = document.createElement("td");
+        td.colSpan = 3;
+        td.style.cssText = "padding-top:16px;padding-bottom:2px;border-bottom:none;font-size:11.5px;" +
+          "text-transform:uppercase;letter-spacing:.5px;color:var(--accent);font-weight:700;";
+        td.textContent = SECTIONS[t.cat] || t.cat;
+        tr.appendChild(td);
+        rowsBody.appendChild(tr);
+      }
+
+      const r = state.rows[t.id] || (state.rows[t.id] = { status: "", comment: "" });
+      const tr = document.createElement("tr");
+      tr.dataset.id = t.id;
+
+      const tdStatus = document.createElement("td");
+      const sel = document.createElement("select");
+      sel.className = "status";
+      sel.dataset.id = t.id;
+      [
+        ["", "☐ À tester"],
+        ["ok", "✅ OK"],
+        ["bad", "❌ Problème"],
+        ["na", "➖ N/A"],
+      ].forEach(([v, label]) => {
+        const o = document.createElement("option");
+        o.value = v; o.textContent = label;
+        sel.appendChild(o);
+      });
+      sel.value = r.status;
+      sel.dataset.v = r.status;
+      sel.addEventListener("change", () => {
+        r.status = sel.value;
+        sel.dataset.v = sel.value;
+        applyRowClass(tr, sel.value);
+        saveState();
+        updateProgress();
+      });
+      tdStatus.appendChild(sel);
+
+      const tdFn = document.createElement("td");
+      tdFn.className = "row-fn";
+      tdFn.textContent = t.label;
+
+      const tdComment = document.createElement("td");
+      tdComment.className = "col-comment";
+      const inp = document.createElement("input");
+      inp.type = "text";
+      inp.className = "comment";
+      inp.placeholder = "…";
+      inp.value = r.comment;
+      inp.addEventListener("input", () => { r.comment = inp.value; saveState(); });
+      tdComment.appendChild(inp);
+
+      tr.appendChild(tdStatus);
+      tr.appendChild(tdFn);
+      tr.appendChild(tdComment);
+      applyRowClass(tr, r.status);
+      rowsBody.appendChild(tr);
+    }
+  }
+
+  function applyRowClass(tr, status) {
+    tr.classList.remove("row-ok", "row-bad", "row-na");
+    if (status === "ok") tr.classList.add("row-ok");
+    else if (status === "bad") tr.classList.add("row-bad");
+    else if (status === "na") tr.classList.add("row-na");
+  }
+
+  function updateProgress() {
+    const total = TESTS.length;
+    let ok = 0, bad = 0, na = 0;
+    for (const t of TESTS) {
+      const s = state.rows[t.id] && state.rows[t.id].status;
+      if (s === "ok") ok++; else if (s === "bad") bad++; else if (s === "na") na++;
+    }
+    const done = ok + bad + na;
+    const track = $("progressTrack");
+    track.innerHTML = "";
+    const mk = (cls, n) => { const d = document.createElement("div"); d.className = cls;
+      d.style.width = (total ? (n / total * 100) : 0) + "%"; return d; };
+    if (ok) track.appendChild(mk("seg-ok", ok));
+    if (bad) track.appendChild(mk("seg-bad", bad));
+    if (na) track.appendChild(mk("seg-na", na));
+    $("progressCounts").innerHTML =
+      `<b>${done} / ${total}</b> renseignés · ${ok} OK · ${bad} problème(s) · ${na} N/A`;
+  }
+
+  // ---------------------------------------------------------------- meta
+  function initMeta() {
+    for (const id of metaFields) {
+      const el = $(id);
+      if (state.meta[id] !== undefined) el.value = state.meta[id];
+      el.addEventListener("input", () => { state.meta[id] = el.value; saveState(); });
+      el.addEventListener("change", () => { state.meta[id] = el.value; saveState(); });
+    }
+    if (!$("mDate").value) {
+      const d = new Date();
+      $("mDate").value = d.toISOString().slice(0, 10);
+      state.meta.mDate = $("mDate").value;
+    }
+    $("mNotes").value = state.notes || "";
+    $("mNotes").addEventListener("input", () => { state.notes = $("mNotes").value; saveState(); });
+  }
+
+  // ---------------------------------------------------------------- markdown
+  const STATUS_MARK = { "": "[ ]", ok: "[x]", bad: "[!]", na: "[-]" };
+  const STATUS_WORD = { "": "à tester", ok: "OK", bad: "problème", na: "N/A" };
+
+  function escapeCell(s) {
+    return (s || "").replace(/\|/g, "\\|").replace(/\r?\n/g, " ").trim();
+  }
+
+  function buildMarkdown() {
+    const m = state.meta;
+    const lines = [];
+    lines.push("# Rapport de test — Turbo Everdrive USB Tools GUI (Windows)");
+    lines.push("");
+    lines.push(`**Testeur :** ${m.mTester || "—"}`);
+    lines.push(`**Date :** ${m.mDate || "—"}`);
+    lines.push(`**Carte :** ${m.mModel || "—"}`);
+    lines.push(`**Version testée :** ${m.mVersion || "—"}`);
+    lines.push(`**Port de connexion :** ${m.mPort || "—"}`);
+    lines.push(`**Système :** ${m.mOs || "—"}`);
+    lines.push(`**ROM(s) utilisée(s) :** ${m.mRoms || "—"}`);
+    lines.push("");
+
+    let ok = 0, bad = 0, na = 0, todo = 0;
+    for (const t of TESTS) {
+      const s = (state.rows[t.id] && state.rows[t.id].status) || "";
+      if (s === "ok") ok++; else if (s === "bad") bad++; else if (s === "na") na++; else todo++;
+    }
+    lines.push(`**Résumé :** ${ok}/${TESTS.length} OK · ${bad} problème(s) · ${na} N/A · ${todo} non testé(s)`);
+    lines.push("");
+    lines.push("| Validé | Test | Fonction | Commentaire |");
+    lines.push("|---|---|---|---|");
+    for (const t of TESTS) {
+      const r = state.rows[t.id] || { status: "", comment: "" };
+      const mark = STATUS_MARK[r.status] + (r.status ? ` ${STATUS_WORD[r.status]}` : "");
+      lines.push(`| ${mark} | ${SECTIONS[t.cat] || t.cat} | ${escapeCell(t.label)} | ${escapeCell(r.comment)} |`);
+    }
+    lines.push("");
+    lines.push("## Notes générales");
+    lines.push("");
+    lines.push(state.notes && state.notes.trim() ? state.notes.trim() : "_(aucune)_");
+    lines.push("");
+    return lines.join("\n");
+  }
+
+  // ---------------------------------------------------------------- actions
+  $("btnGenerate").addEventListener("click", () => {
+    const md = buildMarkdown();
+    $("mdOutput").value = md;
+    $("outputCard").hidden = false;
+    $("outputCard").scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+
+  $("btnCopy").addEventListener("click", async () => {
+    const ta = $("mdOutput");
+    let done = false;
+    try {
+      await navigator.clipboard.writeText(ta.value);
+      done = true;
+    } catch (_) {
+      try {
+        ta.removeAttribute("readonly");
+        ta.focus(); ta.select();
+        done = document.execCommand("copy");
+        ta.setAttribute("readonly", "readonly");
+      } catch (_) { done = false; }
+    }
+    const flag = $("copiedFlag");
+    flag.textContent = done ? "Copié ✔" : "Échec de la copie — sélectionnez le texte manuellement";
+    flag.classList.add("show");
+    setTimeout(() => flag.classList.remove("show"), 2200);
+  });
+
+  $("btnDownload").addEventListener("click", () => {
+    const md = $("mdOutput").value || buildMarkdown();
+    const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const dateSlug = (state.meta.mDate || "").replace(/-/g, "");
+    a.href = url;
+    a.download = `rapport-test-ted-usb-tools${dateSlug ? "-" + dateSlug : ""}.md`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  });
+
+  $("btnReset").addEventListener("click", () => {
+    if (!confirm("Effacer toutes les réponses de la grille et les informations de test ?")) return;
+    state = { meta: {}, notes: "", rows: {} };
+    saveState();
+    location.reload();
+  });
+
+  // ---------------------------------------------------------------- init
+  loadState();
+  buildRows();
+  initMeta();
+  updateProgress();
+})();
+</script>
+</body>
+</html>
