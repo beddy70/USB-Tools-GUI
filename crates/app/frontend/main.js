@@ -290,7 +290,7 @@ function renderGrid(sorted) {
         card.classList.add("dragging");
       });
       card.addEventListener("dragend", () => card.classList.remove("dragging"));
-      card.addEventListener("dblclick", () => doDownloadSd(full));
+      card.addEventListener("dblclick", () => playSd(entry, full));
       card.addEventListener("contextmenu", (e) => {
         e.preventDefault();
         openCtxMenu(e.clientX, e.clientY, entry, full);
@@ -350,7 +350,7 @@ function renderList(sorted) {
       tr.classList.add("dir-link");
       tr.addEventListener("click", () => { explorerPath = full; renderExplorer(); });
     } else {
-      tr.addEventListener("dblclick", () => doDownloadSd(full));
+      tr.addEventListener("dblclick", () => playSd(entry, full));
       tr.addEventListener("contextmenu", (e) => {
         e.preventDefault();
         openCtxMenu(e.clientX, e.clientY, entry, full);
@@ -454,11 +454,18 @@ function closeCtxMenu() {
   ctxEntry = null; ctxFull = null;
 }
 
+// Ferme sur un clic ailleurs ou Échap. (Pas d'écouteur "contextmenu" sur
+// document : l'ouverture elle-même est un événement "contextmenu" qui
+// remonte jusqu'ici par bouillonnement — un tel écouteur refermait donc le
+// menu à l'instant même où il venait de s'ouvrir.)
 document.addEventListener("click", closeCtxMenu);
-document.addEventListener("contextmenu", (e) => {
-  if (!els.sdCtxMenu.contains(e.target)) closeCtxMenu();
-});
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeCtxMenu(); });
+
+async function playSd(entry, full) {
+  log(`Lancement de ${entry.name}…`);
+  const res = await safeInvoke("run_rom", { rom: "sd:/" + full });
+  if (res && !res.isErr) log("Jeu lancé ✔", "ok");
+}
 
 els.sdCtxMenu.addEventListener("click", async (e) => {
   const btn = e.target.closest("button[data-action]");
@@ -468,9 +475,7 @@ els.sdCtxMenu.addEventListener("click", async (e) => {
   closeCtxMenu();
 
   if (action === "play") {
-    log(`Lancement de ${entry.name}…`);
-    const res = await safeInvoke("run_rom", { rom: "sd:/" + full });
-    if (res && !res.isErr) log("Jeu lancé ✔", "ok");
+    playSd(entry, full);
   } else if (action === "download") {
     doDownloadSd(full);
   } else if (action === "delete") {
