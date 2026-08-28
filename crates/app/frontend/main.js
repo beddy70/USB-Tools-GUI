@@ -431,13 +431,16 @@ async function uploadOne(local) {
   log(`Téléversement de ${name} → ${explorerPath || "racine"}…`);
   const res = await safeInvoke("upload", { local, dest });
   if (res && !res.isErr) log(`✔ ${name} envoyé`, "ok");
-  renderExplorer();
 }
 
+// Rafraîchit le dossier courant une seule fois après le lot complet (plutôt
+// qu'après chaque fichier) : évite de relister la carte N fois lors d'un
+// dépôt multiple.
 async function uploadAll(files) {
   if (!files.length) return;
   log(`Envoi de ${files.length} fichier(s) vers ${explorerPath || "racine"}…`, "info");
   for (const f of files) await uploadOne(f);
+  await renderExplorer();
 }
 
 // ---- barre d'outils ----
@@ -450,7 +453,10 @@ els.explorerUp.addEventListener("click", () => {
 els.explorerRefresh.addEventListener("click", renderExplorer);
 els.explorerImport.addEventListener("click", async () => {
   const picked = await safeInvoke("pick_file");
-  if (picked) await uploadOne(picked);
+  if (picked) {
+    await uploadOne(picked);
+    await renderExplorer();
+  }
 });
 
 // ---------------------------------------------------------------- jouer
