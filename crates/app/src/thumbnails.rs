@@ -54,9 +54,7 @@ const FUZZY_THRESHOLD: f64 = 0.80;
 pub enum Kind {
     Boxart,
     Snap,
-    /// Écran-titre — pas encore câblé côté commandes Tauri, gardé pour
-    /// compléter l'API si l'écran-titre s'avère utile plus tard.
-    #[allow(dead_code)]
+    /// Écran-titre — alterne avec `Snap` dans la fiche de détail (frontend).
     Title,
 }
 
@@ -482,5 +480,17 @@ mod tests {
         let m = m.expect("attendu : correspondance approchée trouvée sur le premier segment");
         assert!(m.matched_title.contains("Bull Fight"));
         println!("matched: {} ({:.0}%)", m.matched_title, m.score * 100.0);
+    }
+
+    // Kind::Title (écran-titre) : même mécanique que Boxart/Snap, sur un
+    // dossier différent (Named_Titles) du même dépôt.
+    #[test]
+    #[ignore]
+    fn fetch_title_screen() {
+        let dir = std::env::temp_dir().join("edlink-thumb-test-title");
+        let _ = std::fs::remove_dir_all(&dir);
+        let m = tauri::async_runtime::block_on(fetch(&dir, "Dragon's Curse (U).pce", Kind::Title));
+        let m = m.expect("attendu : écran-titre trouvé via variante (USA)");
+        assert_eq!(m.score, 1.0);
     }
 }

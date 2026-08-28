@@ -21,7 +21,7 @@ const els = {
   gameModal: $("game-modal"), gameModalClose: $("game-modal-close"),
   gameBoxart: $("game-boxart"), gameBoxartPh: $("game-boxart-ph"),
   gameTitle: $("game-title"), gameMeta: $("game-meta"), gameMatchInfo: $("game-match-info"),
-  gameSnapWrap: $("game-snap-wrap"), gameSnap: $("game-snap"),
+  gameSnapWrap: $("game-snap-wrap"), gameSnap: $("game-snap"), gameSnapLabel: $("game-snap-label"),
   gamePlay: $("game-play"), gameDownload: $("game-download"),
   romPath: $("rom-path"), screenCard: $("screen-card"), screenImg: $("screen-img"),
   batW: $("bat-w"), batH: $("bat-h"), resW: $("res-w"), resH: $("res-h"),
@@ -740,6 +740,47 @@ async function loadBoxartInto(romName, frame, seq) {
 
 let gameModalTarget = null; // { entry, full }
 
+// Écran-titre / capture en jeu : alternent toutes les secondes dans la fiche
+// de détail quand les deux sont disponibles (sinon la seule trouvée reste
+// affichée fixe).
+let gameSnapTimer = null;
+let gameSnapImages = []; // [{ uri, label }]
+let gameSnapIndex = 0;
+
+function showGameSnapFrame() {
+  const frame = gameSnapImages[gameSnapIndex];
+  if (!frame) return;
+  els.gameSnap.src = frame.uri;
+  els.gameSnap.alt = frame.label;
+  els.gameSnap.classList.remove("fade");
+  void els.gameSnap.offsetWidth; // relance l'animation même si la classe était déjà retirée
+  els.gameSnap.classList.add("fade");
+  els.gameSnapLabel.textContent = frame.label;
+  els.gameSnapLabel.hidden = gameSnapImages.length < 2;
+}
+
+function stopSnapSlideshow() {
+  if (gameSnapTimer) { clearInterval(gameSnapTimer); gameSnapTimer = null; }
+  gameSnapImages = [];
+  gameSnapIndex = 0;
+  els.gameSnapWrap.hidden = true;
+}
+
+function startSnapSlideshow(images) {
+  stopSnapSlideshow();
+  gameSnapImages = images;
+  if (!images.length) { els.gameSnapWrap.hidden = true; return; }
+  els.gameSnapWrap.hidden = false;
+  gameSnapIndex = 0;
+  showGameSnapFrame();
+  if (images.length > 1) {
+    gameSnapTimer = setInterval(() => {
+      gameSnapIndex = (gameSnapIndex + 1) % gameSnapImages.length;
+      showGameSnapFrame();
+    }, 1000);
+  }
+}
+
 function showMatchInfo(cached) {
   if (!cached || cached.score >= 1) {
     els.gameMatchInfo.hidden = true;
@@ -760,7 +801,7 @@ function openGameModal(entry, full) {
   els.gameBoxartPh.hidden = false;
   els.gameBoxartPh.textContent = "🎮";
   els.gameMatchInfo.hidden = true;
-  els.gameSnapWrap.hidden = true;
+  stopSnapSlideshow();
   els.gameModal.hidden = false;
 
   const cached = boxartCache.get(entry.name);
@@ -785,16 +826,21 @@ function openGameModal(entry, full) {
       els.gameBoxartPh.hidden = true;
       showMatchInfo(found);
     }
-    if (media.snap_base64) {
-      els.gameSnap.src = "data:image/png;base64," + media.snap_base64;
-      els.gameSnapWrap.hidden = false;
+    const frames = [];
+    if (media.title_base64) {
+      frames.push({ uri: "data:image/png;base64," + media.title_base64, label: "Écran-titre" });
     }
+    if (media.snap_base64) {
+      frames.push({ uri: "data:image/png;base64," + media.snap_base64, label: "Capture en jeu" });
+    }
+    startSnapSlideshow(frames);
   });
 }
 
 function closeGameModal() {
   els.gameModal.hidden = true;
   gameModalTarget = null;
+  stopSnapSlideshow();
 }
 els.gameModal.addEventListener("click", (e) => { if (e.target === els.gameModal) closeGameModal(); });
 els.gameModalClose.addEventListener("click", closeGameModal);

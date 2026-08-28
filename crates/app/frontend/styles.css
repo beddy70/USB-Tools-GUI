@@ -265,9 +265,16 @@ button.btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; box-s
 .game-match-info { font-size: 11.5px; color: var(--yellow); margin-bottom: 10px;
   padding: 6px 9px; border: 1px solid rgba(255,224,102,0.35); border-radius: 6px;
   background: rgba(255,224,102,0.08); }
-.game-snap-wrap { border-radius: 8px; overflow: hidden; border: 1px solid var(--border);
-  margin-bottom: 14px; background: var(--bg-2); }
+.game-snap-wrap { position: relative; border-radius: 8px; overflow: hidden;
+  border: 1px solid var(--border); margin-bottom: 14px; background: var(--bg-2); }
 .game-snap-wrap img { width: 100%; height: auto; display: block; }
+/* Écran-titre / capture en jeu : image changée par fondu (voir main.js) plutôt
+   qu'un flash brut quand les deux alternent toutes les secondes. */
+.game-snap-wrap img.fade { animation: game-snap-fade .5s ease; }
+@keyframes game-snap-fade { from { opacity: 0.15; } to { opacity: 1; } }
+.game-snap-label { position: absolute; top: 6px; left: 6px; font-size: 10.5px;
+  font-weight: 600; letter-spacing: .3px; text-transform: uppercase; color: #fff;
+  padding: 3px 8px; border-radius: 5px; background: rgba(0,0,0,0.55); }
 .game-actions { display: flex; gap: 10px; margin-top: auto; }
 @media (max-width: 560px) {
   .game-box-body { flex-direction: column; }

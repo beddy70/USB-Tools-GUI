@@ -370,12 +370,14 @@ async fn fetch_boxart(app: tauri::AppHandle, name: String) -> Result<BoxartResp,
     Ok(m.into())
 }
 
-/// Média détaillé d'un jeu (jaquette + capture en jeu) pour la fiche du
-/// carrousel — la capture n'est demandée qu'à l'ouverture de la fiche, pas
-/// pour chaque vignette.
+/// Média détaillé d'un jeu (jaquette + écran-titre + capture en jeu) pour la
+/// fiche du carrousel — demandés seulement à l'ouverture de la fiche, pas
+/// pour chaque vignette. Écran-titre et capture alternent dans l'UI (voir
+/// main.js) quand les deux sont disponibles.
 #[derive(Serialize)]
 struct GameMedia {
     boxart: BoxartResp,
+    title_base64: Option<String>,
     snap_base64: Option<String>,
 }
 
@@ -384,9 +386,11 @@ async fn fetch_game_media(app: tauri::AppHandle, name: String) -> Result<GameMed
     let cache_dir = app.path().app_cache_dir().map_err(|e| e.to_string())?;
     let base = base_name(&name);
     let boxart = thumbnails::fetch(&cache_dir, &base, thumbnails::Kind::Boxart).await;
+    let title_screen = thumbnails::fetch(&cache_dir, &base, thumbnails::Kind::Title).await;
     let snap = thumbnails::fetch(&cache_dir, &base, thumbnails::Kind::Snap).await;
     Ok(GameMedia {
         boxart: boxart.into(),
+        title_base64: title_screen.map(|m| b64(&m.bytes)),
         snap_base64: snap.map(|m| b64(&m.bytes)),
     })
 }
