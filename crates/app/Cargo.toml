@@ -15,3 +15,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 base64 = "0.22"
 edlink-core = { path = "../edlink-core" }
+# rustls (pas openssl/native-tls) : indispensable pour la cross-compilation
+# Windows (x86_64-pc-windows-gnu) déjà utilisée par ce projet (voir README).
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
+percent-encoding = "2"

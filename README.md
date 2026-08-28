@@ -45,6 +45,7 @@ carte — le tout relié à la cartouche par **USB série** (CDC).
 | **Connexion** | Détection automatique du port série de la carte (ou choix manuel) |
 | **Infos carte** (`devinf`) | Nom, n° de série, versions, compteurs, tensions |
 | **Carte SD** (onglet) | Explorateur ; envoi (glisser‑déposer) et téléchargement de fichiers via le protocole FatFs de la carte, avec barre de progression ; clic droit sur un fichier → menu contextuel (Jouer, Renommer, Télécharger, Effacer) |
+| **Carrousel de pochettes** (vue 🎴 de l'onglet Carte SD) | Jaquettes des ROM via la base [Libretro Thumbnails](https://github.com/libretro-thumbnails) (nécessite Internet, mise en cache locale) ; clic → fiche détaillée (taille, capture en jeu) avec « Jouer » et « Télécharger » |
 | **Lancer un jeu** (`run`) | Déploie la ROM sur la SD (`sd:/usb-games/`) puis la lance |
 | **Reset** | Réinitialise la console |
 | **Capture d'écran** | Capture le menu de la carte (VRAM + palette → PNG) |
@@ -234,14 +235,21 @@ Reprend la palette « retrowave » de l'application.
 
 ## Limitations connues
 
-- **Listing de dossiers SD reconstitué, confirmé en échec sur matériel réel** :
-  `CMD_F_DIR_OPN` / `CMD_F_DIR_RD` ne sont pas câblés par la référence
-  `edlink` ; l'implémentation reproduit la couche FS du firmware MCU des
-  cartes « Pro », mais une session de test sur une vraie Turbo EverDrive Pro
-  montre que `CMD_F_DIR_RD` ne répond pas (l'onglet Carte SD affiche un
-  timeout). En attente d'une trace `EDLINK_TRACE=1 edlink-cli --port … ls
-  sd:/GAMES` sur cette carte pour corriger le protocole — cf.
-  `docs/PROTOCOL.md`.
+- **Listing de dossiers SD** : `CMD_F_DIR_OPN` / `CMD_F_DIR_RD` ne sont câblés
+  ni par `edlink` ni par `turbolink.exe` (aucun outil officiel n'expose de
+  `ls`). Protocole confirmé par désassemblage IL de `turbolink.exe` (bug
+  initial trouvé et corrigé : `CMD_F_DIR_RD` attend un argument `u16` non
+  envoyé) — cf. `docs/PROTOCOL.md`. Fonctionne sur l'émulateur ; à
+  reconfirmer sur matériel réel.
+- **Carrousel de pochettes** : correspondance par nom entre le fichier ROM
+  (souvent en convention GoodTools/TOSEC, ex. « Jeu (U).pce ») et la base
+  Libretro (convention No-Intro, « Jeu (USA).png ») — best effort (quelques
+  substitutions de code région), pas garanti pour tous les jeux. Nécessite
+  une connexion Internet (requêtes HTTPS vers `raw.githubusercontent.com`
+  depuis le backend Rust, jamais depuis la carte/le port série) ; résultats
+  mis en cache localement (dossier cache de l'application) après le premier
+  essai, y compris les échecs, pour ne plus jamais retaper le réseau pour un
+  jeu déjà su sans jaquette.
 - **TED Pro non compatible RTC** via `edlink` (`RtcSet`/`RtcCal` lèvent
   `UnsupportedCmd`) : le RTC n'est pas exposé.
 - **Lecture mémoire (`memrd`) = bus cartouche** : sur matériel réel, chaque

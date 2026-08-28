@@ -16,7 +16,12 @@ const els = {
   modalOk: $("modal-ok"), modalCancel: $("modal-cancel"),
   transferBar: $("transfer-bar"), transferLabel: $("transfer-label"),
   transferPct: $("transfer-pct"), transferFill: $("transfer-fill"),
-  viewIcons: $("view-icons"), viewList: $("view-list"),
+  viewIcons: $("view-icons"), viewList: $("view-list"), viewCarousel: $("view-carousel"),
+  gameModal: $("game-modal"), gameModalClose: $("game-modal-close"),
+  gameBoxart: $("game-boxart"), gameBoxartPh: $("game-boxart-ph"),
+  gameTitle: $("game-title"), gameMeta: $("game-meta"),
+  gameSnapWrap: $("game-snap-wrap"), gameSnap: $("game-snap"),
+  gamePlay: $("game-play"), gameDownload: $("game-download"),
   romPath: $("rom-path"), screenCard: $("screen-card"), screenImg: $("screen-img"),
   batW: $("bat-w"), batH: $("bat-h"), resW: $("res-w"), resH: $("res-h"),
   scrollX: $("scroll-x"), scrollY: $("scroll-y"),
@@ -226,10 +231,17 @@ function parentPath(dir) {
   return idx <= 0 ? "" : clean.slice(0, idx);
 }
 
+const ROM_EXTS = ["pce", "sgx", "rom", "bin"];
+function isRomFile(entry) {
+  if (entry.is_dir) return false;
+  const ext = (entry.name.split(".").pop() || "").toLowerCase();
+  return ROM_EXTS.includes(ext);
+}
+
 function iconFor(entry) {
   if (entry.is_dir) return "📁";
   const ext = (entry.name.split(".").pop() || "").toLowerCase();
-  if (["pce", "sgx", "rom", "bin"].includes(ext)) return "🎮";
+  if (ROM_EXTS.includes(ext)) return "🎮";
   if (["png", "jpg", "jpeg", "gif", "bmp", "webp"].includes(ext)) return "🖼️";
   if (["txt", "md", "ini", "log", "cfg", "json"].includes(ext)) return "📄";
   if (["sav", "ram", "bram"].includes(ext)) return "💾";
@@ -295,7 +307,19 @@ async function renderExplorer() {
     return;
   }
 
-  const container = explorerView === "list" ? renderList(sorted) : renderGrid(sorted);
+  let container;
+  if (explorerView === "carousel") {
+    container = renderCarousel(sorted);
+    if (!sorted.some((e) => e.is_dir || isRomFile(e))) {
+      els.explorerStatus.textContent =
+        "Aucun jeu (.pce/.sgx/.rom/.bin) dans ce dossier — passez en vue liste pour tout voir.";
+      els.explorer.appendChild(container);
+      explorerBusy = false;
+      return;
+    }
+  } else {
+    container = explorerView === "list" ? renderList(sorted) : renderGrid(sorted);
+  }
   els.explorer.appendChild(container);
   els.explorerStatus.textContent =
     `${sorted.length} élément(s) · ${explorerPath ? explorerPath : "racine"}`;
@@ -409,12 +433,127 @@ function renderList(sorted) {
   return table;
 }
 
+// ------------------------------------------------------------ vue carrousel
+// Pochettes (Libretro Thumbnails, cf. thumbnails.rs) : une carte par dossier
+// (navigation) et par fichier ROM connu (.pce/.sgx/.rom/.bin) — les autres
+// fichiers (sauvegardes, images…) sont omis de cette vue, pas du dossier.
+const boxartCache = new Map(); // nom de fichier -> data URI (ou null = introuvable)
+
+function renderCarousel(sorted) {
+  const wrap = document.createElement("div");
+  wrap.className = "carousel";
+  for (const entry of sorted) {
+    if (!entry.is_dir && !isRomFile(entry)) continue;
+    const full = joinSdPath(explorerPath, entry.name);
+
+    const card = document.createElement("div");
+    card.className = "boxart-card";
+    const frame = document.createElement("div");
+    frame.className = "boxart-frame";
+    const ph = document.createElement("div");
+    ph.className = "boxart-ph";
+    ph.textContent = entry.is_dir ? "📁" : "🎮";
+    frame.appendChild(ph);
+    const name = document.createElement("div");
+    name.className = "boxart-name";
+    name.textContent = entry.name;
+    card.appendChild(frame);
+    card.appendChild(name);
+
+    if (entry.is_dir) {
+      card.addEventListener("click", () => { explorerPath = full; renderExplorer(); });
+    } else {
+      card.addEventListener("click", () => openGameModal(entry, full));
+      card.addEventListener("contextmenu", (e) => {
+        e.preventDefault();
+        openCtxMenu(e.clientX, e.clientY, entry, full);
+      });
+      loadBoxartInto(entry.name, frame);
+    }
+    wrap.appendChild(card);
+  }
+  return wrap;
+}
+
+// Récupère la jaquette (cache mémoire -> commande Tauri, elle-même mise en
+// cache disque côté Rust) et l'insère dans `frame` si trouvée ; sinon laisse
+// le placeholder 🎮 en place.
+async function loadBoxartInto(romName, frame) {
+  let dataUri = boxartCache.get(romName);
+  if (dataUri === undefined) {
+    const res = await safeInvoke("fetch_boxart", { name: romName });
+    dataUri = res ? "data:image/png;base64," + res : null;
+    boxartCache.set(romName, dataUri);
+  }
+  if (!dataUri || !frame.isConnected) return; // vue changée entre-temps
+  const img = document.createElement("img");
+  img.src = dataUri;
+  img.alt = romName;
+  frame.replaceChildren(img);
+}
+
+let gameModalTarget = null; // { entry, full }
+
+function openGameModal(entry, full) {
+  gameModalTarget = { entry, full };
+  els.gameTitle.textContent = entry.name;
+  els.gameMeta.innerHTML =
+    `<b>Taille</b> ${fmtSize(entry.size)}<br><b>Chemin</b> ${full}`;
+  els.gameBoxart.hidden = true;
+  els.gameBoxartPh.hidden = false;
+  els.gameBoxartPh.textContent = "🎮";
+  els.gameSnapWrap.hidden = true;
+  els.gameModal.hidden = false;
+
+  const cached = boxartCache.get(entry.name);
+  if (cached) {
+    els.gameBoxart.src = cached;
+    els.gameBoxart.hidden = false;
+    els.gameBoxartPh.hidden = true;
+  }
+
+  safeInvoke("fetch_game_media", { name: entry.name }).then((media) => {
+    if (!media || gameModalTarget?.entry !== entry) return; // fermé/changé entre-temps
+    if (media.boxart_base64) {
+      const uri = "data:image/png;base64," + media.boxart_base64;
+      boxartCache.set(entry.name, uri);
+      els.gameBoxart.src = uri;
+      els.gameBoxart.hidden = false;
+      els.gameBoxartPh.hidden = true;
+    }
+    if (media.snap_base64) {
+      els.gameSnap.src = "data:image/png;base64," + media.snap_base64;
+      els.gameSnapWrap.hidden = false;
+    }
+  });
+}
+
+function closeGameModal() {
+  els.gameModal.hidden = true;
+  gameModalTarget = null;
+}
+els.gameModal.addEventListener("click", (e) => { if (e.target === els.gameModal) closeGameModal(); });
+els.gameModalClose.addEventListener("click", closeGameModal);
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeGameModal(); });
+els.gamePlay.addEventListener("click", () => {
+  if (!gameModalTarget) return;
+  const { entry, full } = gameModalTarget;
+  closeGameModal();
+  playSd(entry, full);
+});
+els.gameDownload.addEventListener("click", () => {
+  if (!gameModalTarget) return;
+  doDownloadSd(gameModalTarget.full);
+});
+
 function setView(v) {
   explorerView = v;
   els.viewIcons.classList.toggle("active", v === "grid");
   els.viewList.classList.toggle("active", v === "list");
+  els.viewCarousel.classList.toggle("active", v === "carousel");
   renderExplorer();
 }
+els.viewCarousel.addEventListener("click", () => setView("carousel"));
 
 // ---- dépôt de fichiers OS -> explorateur (upload) ----
 ["dragenter", "dragover"].forEach((evt) =>

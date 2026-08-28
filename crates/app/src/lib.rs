@@ -3,6 +3,8 @@
 //! Expose au frontend web des commandes de connexion et d'opérations sur la
 //! carte (infos, transfert fichiers, lancement, reset, capture, memrd).
 
+mod thumbnails;
+
 use edlink_core::{EdError, Ted};
 use serde::Serialize;
 use std::sync::Mutex;
@@ -121,6 +123,8 @@ pub fn run() {
             list_sd,
             delete_sd,
             rename_sd,
+            fetch_boxart,
+            fetch_game_media,
             run_rom,
             load_rom,
             reset_console,
@@ -324,6 +328,42 @@ fn list_sd(state: State<'_, AppState>, path: String) -> Result<Vec<SdEntry>, Str
                 size: e.size,
             })
             .collect()
+    })
+}
+
+fn b64(bytes: &[u8]) -> String {
+    base64::Engine::encode(&base64::engine::general_purpose::STANDARD, bytes)
+}
+
+/// Jaquette d'un jeu de la carte SD via Libretro Thumbnails (voir
+/// `thumbnails.rs`) — `None` si aucune correspondance de nom trouvée. Utilisé
+/// pour chaque vignette du carrousel : mise en cache disque après le premier
+/// essai (trouvé ou non), donc peu coûteux à ré-appeler.
+#[tauri::command]
+async fn fetch_boxart(app: tauri::AppHandle, name: String) -> Result<Option<String>, String> {
+    let cache_dir = app.path().app_cache_dir().map_err(|e| e.to_string())?;
+    let bytes = thumbnails::fetch(&cache_dir, &base_name(&name), thumbnails::Kind::Boxart).await;
+    Ok(bytes.map(|b| b64(&b)))
+}
+
+/// Média détaillé d'un jeu (jaquette + capture en jeu) pour la fiche du
+/// carrousel — la capture n'est demandée qu'à l'ouverture de la fiche, pas
+/// pour chaque vignette.
+#[derive(Serialize)]
+struct GameMedia {
+    boxart_base64: Option<String>,
+    snap_base64: Option<String>,
+}
+
+#[tauri::command]
+async fn fetch_game_media(app: tauri::AppHandle, name: String) -> Result<GameMedia, String> {
+    let cache_dir = app.path().app_cache_dir().map_err(|e| e.to_string())?;
+    let base = base_name(&name);
+    let boxart = thumbnails::fetch(&cache_dir, &base, thumbnails::Kind::Boxart).await;
+    let snap = thumbnails::fetch(&cache_dir, &base, thumbnails::Kind::Snap).await;
+    Ok(GameMedia {
+        boxart_base64: boxart.map(|b| b64(&b)),
+        snap_base64: snap.map(|b| b64(&b)),
     })
 }
 
