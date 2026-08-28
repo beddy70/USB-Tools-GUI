@@ -29,6 +29,7 @@ carte — le tout relié à la cartouche par **USB série** (CDC).
 - [Prérequis](#prérequis)
 - [Build & lancement](#build--lancement)
 - [Utilisation](#utilisation)
+- [Guide utilisateur complet](docs/GUIDE_UTILISATEUR.md)
 - [Vérification matérielle](#vérification-matérielle)
 - [Grille de test (QA)](#grille-de-test-qa)
 - [Limitations connues](#limitations-connues)
@@ -45,7 +46,7 @@ carte — le tout relié à la cartouche par **USB série** (CDC).
 | **Connexion** | Détection automatique du port série de la carte (ou choix manuel) |
 | **Infos carte** (`devinf`) | Nom, n° de série, versions, compteurs, tensions |
 | **Carte SD** (onglet) | Explorateur ; envoi (glisser‑déposer) et téléchargement de fichiers via le protocole FatFs de la carte, avec barre de progression ; clic droit sur un fichier → menu contextuel (Jouer, Renommer, Télécharger, Effacer) |
-| **GAMES** (onglet 🕹️, sous Connexion) | Navigateur en deux niveaux ancré sur un dossier de base configurable (défaut `sd:/GAMES`, persisté) : liste colorée des sous-dossiers (catégories, ex. Action/RPG/Plateforme) façon Recalbox, puis mosaïque des ROM de la catégorie (fond repris de la couleur de la catégorie) avec jaquette [Libretro Thumbnails](https://github.com/libretro-thumbnails) (nécessite Internet, mise en cache locale) ; clic sur un jeu → fiche détaillée (taille, capture en jeu) avec « Jouer » et « Télécharger » |
+| **GAMES** (onglet 🕹️, sous Connexion) | Navigateur en deux niveaux ancré sur un dossier de base configurable (défaut `sd:/GAMES`, persisté) : liste colorée des sous-dossiers (catégories, ex. Action/RPG/Plateforme) façon Recalbox, puis mosaïque des ROM de la catégorie (fond repris de la couleur de la catégorie) avec jaquette [Libretro Thumbnails](https://github.com/libretro-thumbnails) (correspondance exacte puis recherche approchée avec score, ⚙ pour corriger manuellement — nécessite Internet, mise en cache locale) ; clic sur un jeu → fiche détaillée (taille, écran-titre et capture en jeu alternés toutes les 2 s) avec « Jouer » et « Télécharger » |
 | **Lancer un jeu** (`run`) | Déploie la ROM sur la SD (`sd:/usb-games/`) puis la lance |
 | **Reset** | Réinitialise la console |
 | **Capture d'écran** | Capture le menu de la carte (VRAM + palette → PNG) |
@@ -178,15 +179,24 @@ réinitialise son état par session. Commandes utiles :
 
 ## Utilisation
 
+*Résumé rapide ci-dessous — pour un guide pas à pas destiné à l'utilisateur
+final (installation, chaque onglet en détail, dépannage courant), voir
+[`docs/GUIDE_UTILISATEUR.md`](docs/GUIDE_UTILISATEUR.md).*
+
 1. Branchez la cartouche en USB et affichez le **menu OS** de la carte.
 2. Lancez l'app puis **Connecter** (le port se détecte automatiquement).
-3. Onglet **Carte SD** : parcourez la carte, déposez des fichiers pour les
-   envoyer (barre de progression), double‑cliquez pour télécharger.
-4. Onglet **Jouer** : **Choisir et lancer…** déploie puis lance la ROM.
-5. **Capturer l'écran** affiche le menu de la carte (format PNG).
-6. Onglet **Mémoire** : RAM HuCard (via `memrd`), VRAM/CRAM (instantané `*v`,
+3. Onglet **GAMES** : dossier de base `sd:/GAMES` par défaut (⚙ pour le
+   changer) — catégories = ses sous-dossiers ; clic sur une catégorie →
+   mosaïque des ROM avec jaquette ; clic sur un jeu → fiche détaillée
+   (Jouer/Télécharger).
+4. Onglet **Carte SD** : parcourez la carte, déposez des fichiers pour les
+   envoyer (barre de progression), double‑cliquez pour télécharger, **clic
+   droit** sur un fichier pour Jouer/Renommer/Télécharger/Effacer.
+5. Onglet **Jouer** : **Choisir et lancer…** déploie puis lance la ROM.
+6. **Capturer l'écran** affiche le menu de la carte (format PNG).
+7. Onglet **Mémoire** : RAM HuCard (via `memrd`), VRAM/CRAM (instantané `*v`,
    menu affiché).
-7. Onglet **Sprites** : planche de tuiles décodées de la VRAM ; choisissez la
+8. Onglet **Sprites** : planche de tuiles décodées de la VRAM ; choisissez la
    taille de cellule (8×8 fond, ou 16×16 à 32×64 pour les 6 tailles de sprite
    du VDC), la palette et le zoom ; cliquez une cellule pour son adresse VRAM
    et son n° de pattern, ou **glissez** pour sélectionner une plage — l'export

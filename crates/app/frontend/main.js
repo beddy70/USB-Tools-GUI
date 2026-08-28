@@ -781,7 +781,10 @@ function startSnapSlideshow(images) {
   }
 }
 
+let gameMatchInfoTimer = null;
+
 function showMatchInfo(cached) {
+  if (gameMatchInfoTimer) { clearTimeout(gameMatchInfoTimer); gameMatchInfoTimer = null; }
   if (!cached || cached.score >= 1) {
     els.gameMatchInfo.hidden = true;
     return;
@@ -790,6 +793,12 @@ function showMatchInfo(cached) {
   els.gameMatchInfo.textContent =
     `⚠ Pochette approchée (${Math.round(cached.score * 100)}%) : « ${cached.matchedTitle} ». ` +
     `Si ce n'est pas le bon jeu, corrigez via ⚙ dans la mosaïque.`;
+  // Correspondance non exacte : juste un avertissement, pas la peine qu'il
+  // reste affiché en permanence — s'efface tout seul.
+  gameMatchInfoTimer = setTimeout(() => {
+    els.gameMatchInfo.hidden = true;
+    gameMatchInfoTimer = null;
+  }, 3000);
 }
 
 function openGameModal(entry, full) {
@@ -800,6 +809,7 @@ function openGameModal(entry, full) {
   els.gameBoxart.hidden = true;
   els.gameBoxartPh.hidden = false;
   els.gameBoxartPh.textContent = "🎮";
+  if (gameMatchInfoTimer) { clearTimeout(gameMatchInfoTimer); gameMatchInfoTimer = null; }
   els.gameMatchInfo.hidden = true;
   stopSnapSlideshow();
   els.gameModal.hidden = false;
@@ -841,6 +851,7 @@ function closeGameModal() {
   els.gameModal.hidden = true;
   gameModalTarget = null;
   stopSnapSlideshow();
+  if (gameMatchInfoTimer) { clearTimeout(gameMatchInfoTimer); gameMatchInfoTimer = null; }
 }
 els.gameModal.addEventListener("click", (e) => { if (e.target === els.gameModal) closeGameModal(); });
 els.gameModalClose.addEventListener("click", closeGameModal);
