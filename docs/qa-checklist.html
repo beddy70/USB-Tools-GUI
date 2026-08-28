@@ -444,27 +444,14 @@
   }
 
   // ---------------------------------------------------------------- captures d'écran
-  // Redimensionne l'image (max 1400px de côté) et la réencode en JPEG : garde
-  // le stockage local raisonnable même avec plusieurs captures jointes.
-  function loadImageResized(file, maxDim = 1400, quality = 0.85) {
+  // Lit le fichier tel quel : aucun redimensionnement ni réencodage. L'image
+  // jointe (aperçu, lightbox, export zip) est l'image d'origine, intacte —
+  // au prix d'un stockage local plus vite saturé avec plusieurs captures
+  // jointes (le bandeau storageWarn prévient déjà de ce cas, voir saveState).
+  function loadImageOriginal(file) {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
-      reader.onload = () => {
-        const img = new Image();
-        img.onload = () => {
-          let w = img.naturalWidth, h = img.naturalHeight;
-          if (w > maxDim || h > maxDim) {
-            const scale = maxDim / Math.max(w, h);
-            w = Math.round(w * scale); h = Math.round(h * scale);
-          }
-          const c = document.createElement("canvas");
-          c.width = w; c.height = h;
-          c.getContext("2d").drawImage(img, 0, 0, w, h);
-          resolve(c.toDataURL("image/jpeg", quality));
-        };
-        img.onerror = () => reject(new Error("image illisible"));
-        img.src = reader.result;
-      };
+      reader.onload = () => resolve(reader.result);
       reader.onerror = () => reject(new Error("lecture du fichier impossible"));
       reader.readAsDataURL(file);
     });
@@ -477,9 +464,9 @@
       .slice(0, 60);
   }
 
-  function suggestedFilename(t) {
+  function suggestedFilename(t, ext = "jpg") {
     const idx = TESTS.findIndex((x) => x.id === t.id);
-    return `t${String(idx + 1).padStart(2, "0")}-${t.cat}-${slugify(t.label)}.jpg`;
+    return `t${String(idx + 1).padStart(2, "0")}-${t.cat}-${slugify(t.label)}.${ext}`;
   }
 
   function renderShotCell(td, t, r) {
@@ -524,8 +511,9 @@
         if (!file) return;
         icon.textContent = "…";
         try {
-          r.image = await loadImageResized(file);
-          r.imageName = suggestedFilename(t);
+          r.image = await loadImageOriginal(file);
+          const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
+          r.imageName = suggestedFilename(t, ext);
         } catch (e) {
           alert("Impossible de charger cette image : " + e.message);
           icon.textContent = "📎";
