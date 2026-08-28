@@ -8,6 +8,8 @@ Usage:
   edlink-cli [--port <PORT>] devinf
   edlink-cli [--port <PORT>] cp <src> <dst>          (dst = sd:chemin ou chemin local)
   edlink-cli [--port <PORT>] ls [sd:chemin]          (liste un dossier de la carte SD)
+  edlink-cli [--port <PORT>] rm <sd:chemin>          (efface un fichier de la carte SD)
+  edlink-cli [--port <PORT>] mv <sd:src> <sd:dst>    (renomme/déplace sur la carte SD)
   edlink-cli [--port <PORT>] run <rom>               (rom = chemin local ou sd:chemin)
   edlink-cli [--port <PORT>] reset
   edlink-cli [--port <PORT>] screen <out.png>
@@ -109,6 +111,24 @@ fn run() -> Result<()> {
                 }
             }
             println!("({} entrée(s), {:?})", entries.len(), t.elapsed());
+            Ok(())
+        }
+        "rm" => {
+            if opts.args.len() != 1 {
+                return Err(EdError::Other("rm requires <sd:chemin>".into()));
+            }
+            let mut ted = Ted::connect(opts.port.as_deref())?;
+            ted.delete_file(&opts.args[0])?;
+            println!("deleted: {}", opts.args[0]);
+            Ok(())
+        }
+        "mv" => {
+            if opts.args.len() != 2 {
+                return Err(EdError::Other("mv requires <sd:src> <sd:dst>".into()));
+            }
+            let mut ted = Ted::connect(opts.port.as_deref())?;
+            ted.rename_file(&opts.args[0], &opts.args[1])?;
+            println!("renamed: {} -> {}", opts.args[0], opts.args[1]);
             Ok(())
         }
         "run" => {

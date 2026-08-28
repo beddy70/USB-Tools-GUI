@@ -11,6 +11,7 @@ const els = {
   crumbs: $("crumbs"), explorer: $("explorer"), explorerEmpty: $("explorer-empty"),
   explorerStatus: $("explorer-status"),
   explorerUp: $("explorer-up"), explorerRefresh: $("explorer-refresh"), explorerImport: $("explorer-import"),
+  sdCtxMenu: $("sd-ctxmenu"),
   transferBar: $("transfer-bar"), transferLabel: $("transfer-label"),
   transferPct: $("transfer-pct"), transferFill: $("transfer-fill"),
   viewIcons: $("view-icons"), viewList: $("view-list"),
@@ -290,6 +291,10 @@ function renderGrid(sorted) {
       });
       card.addEventListener("dragend", () => card.classList.remove("dragging"));
       card.addEventListener("dblclick", () => doDownloadSd(full));
+      card.addEventListener("contextmenu", (e) => {
+        e.preventDefault();
+        openCtxMenu(e.clientX, e.clientY, entry, full);
+      });
       const dl = document.createElement("button");
       dl.className = "dlbtn"; dl.textContent = "⬇"; dl.title = "Télécharger";
       dl.addEventListener("click", (e) => { e.stopPropagation(); doDownloadSd(full); });
@@ -346,6 +351,10 @@ function renderList(sorted) {
       tr.addEventListener("click", () => { explorerPath = full; renderExplorer(); });
     } else {
       tr.addEventListener("dblclick", () => doDownloadSd(full));
+      tr.addEventListener("contextmenu", (e) => {
+        e.preventDefault();
+        openCtxMenu(e.clientX, e.clientY, entry, full);
+      });
     }
     tbody.appendChild(tr);
   }
@@ -424,6 +433,63 @@ async function doDownloadSd(full) {
   const res = await safeInvoke("download", { src: full, local });
   if (res && !res.isErr) log(`✔ Téléchargé : ${full}`, "ok");
 }
+
+// ---- menu contextuel de l'explorateur (clic droit sur un fichier) ----
+let ctxEntry = null, ctxFull = null;
+
+function openCtxMenu(x, y, entry, full) {
+  ctxEntry = entry; ctxFull = full;
+  const menu = els.sdCtxMenu;
+  menu.hidden = false;
+  // Positionné puis recalé pour rester dans la fenêtre (le menu n'a sa
+  // taille réelle qu'une fois affiché, hidden retiré).
+  const { innerWidth: vw, innerHeight: vh } = window;
+  const w = menu.offsetWidth, h = menu.offsetHeight;
+  menu.style.left = Math.min(x, vw - w - 8) + "px";
+  menu.style.top = Math.min(y, vh - h - 8) + "px";
+}
+
+function closeCtxMenu() {
+  els.sdCtxMenu.hidden = true;
+  ctxEntry = null; ctxFull = null;
+}
+
+document.addEventListener("click", closeCtxMenu);
+document.addEventListener("contextmenu", (e) => {
+  if (!els.sdCtxMenu.contains(e.target)) closeCtxMenu();
+});
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeCtxMenu(); });
+
+els.sdCtxMenu.addEventListener("click", async (e) => {
+  const btn = e.target.closest("button[data-action]");
+  if (!btn || !ctxFull) return;
+  const action = btn.dataset.action;
+  const entry = ctxEntry, full = ctxFull;
+  closeCtxMenu();
+
+  if (action === "play") {
+    log(`Lancement de ${entry.name}…`);
+    const res = await safeInvoke("run_rom", { rom: "sd:/" + full });
+    if (res && !res.isErr) log("Jeu lancé ✔", "ok");
+  } else if (action === "download") {
+    doDownloadSd(full);
+  } else if (action === "delete") {
+    if (!confirm(`Effacer « ${entry.name} » de la carte SD ? Cette action est irréversible.`)) return;
+    const res = await safeInvoke("delete_sd", { path: full });
+    if (res !== null) {
+      log(`✔ ${entry.name} effacé`, "ok");
+      renderExplorer();
+    }
+  } else if (action === "rename") {
+    const newName = prompt("Nouveau nom :", entry.name);
+    if (!newName || newName === entry.name) return;
+    const res = await safeInvoke("rename_sd", { path: full, new_name: newName });
+    if (res !== null) {
+      log(`✔ Renommé en ${newName}`, "ok");
+      renderExplorer();
+    }
+  }
+});
 
 async function uploadOne(local) {
   const name = local.split(/[\\/]/).pop();

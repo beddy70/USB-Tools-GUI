@@ -514,6 +514,42 @@ impl Ted {
         Ok(())
     }
 
+    /// Supprime un fichier (ou un dossier vide) de la carte SD. `path` est un
+    /// chemin "périphérique" (`sd:/...`) ou nu. Port de `DeviceIO.delRecord`
+    /// (`turbolink.exe`, désassemblé) : `CMD_F_DEL` + chaîne + `CMD_STATUS`,
+    /// même forme que `CMD_F_DIR_MK`.
+    pub fn delete_file(&mut self, path: &str) -> Result<()> {
+        let dev = get_dev_path(path);
+        self.link.tx_cmd(CMD_F_DEL)?;
+        self.link.tx_string(&dev)?;
+        self.link.check_status()
+    }
+
+    /// Renomme/déplace un fichier sur la carte SD.
+    ///
+    /// Le protocole n'a **aucune commande de renommage natif** — confirmé par
+    /// désassemblage de `turbolink.exe` : son `DeviceIO` n'expose que
+    /// `fileOpen/Read/Write/Close`, `dirMake`, `delRecord`, jamais de
+    /// "rename"/"move". Implémenté en copie intégrale (lecture puis écriture,
+    /// entièrement sur la carte via le buffer hôte) suivie d'une suppression
+    /// de l'original — jamais atomique, donc un peu plus lent et plus risqué
+    /// (coupure en cours = fichier dupliqué) qu'un vrai renommage FatFs, mais
+    /// c'est la seule voie disponible avec ce protocole.
+    pub fn rename_file(&mut self, old_path: &str, new_path: &str) -> Result<()> {
+        let old_dev = get_dev_path(old_path);
+        let new_dev = get_dev_path(new_path);
+        self.file_open(&old_dev, FA_READ)?;
+        let avail = self.file_available()? as usize;
+        let buff = self.file_read(avail, |_, _| {})?;
+        self.file_close()?;
+
+        self.file_open(&new_dev, FA_WRITE | FA_CREATE_ALWAYS | FS_MAKEPATH)?;
+        self.file_write(&buff, |_, _| {})?;
+        self.file_close()?;
+
+        self.delete_file(&old_dev)
+    }
+
     // ------------------------------------------------------- screenshot
     /// Capture l'écran du menu de la carte et renvoie une image PNG.
     ///

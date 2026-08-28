@@ -44,7 +44,7 @@ carte — le tout relié à la cartouche par **USB série** (CDC).
 |---|---|
 | **Connexion** | Détection automatique du port série de la carte (ou choix manuel) |
 | **Infos carte** (`devinf`) | Nom, n° de série, versions, compteurs, tensions |
-| **Carte SD** (onglet) | Explorateur ; envoi (glisser‑déposer) et téléchargement de fichiers via le protocole FatFs de la carte, avec barre de progression |
+| **Carte SD** (onglet) | Explorateur ; envoi (glisser‑déposer) et téléchargement de fichiers via le protocole FatFs de la carte, avec barre de progression ; clic droit sur un fichier → menu contextuel (Jouer, Renommer, Télécharger, Effacer) |
 | **Lancer un jeu** (`run`) | Déploie la ROM sur la SD (`sd:/usb-games/`) puis la lance |
 | **Reset** | Réinitialise la console |
 | **Capture d'écran** | Capture le menu de la carte (VRAM + palette → PNG) |
@@ -117,6 +117,8 @@ cargo run -p edlink-cli -- --port /dev/cu.usbmodemXXXX devinf
 cargo run -p edlink-cli -- --port /dev/cu.usbmodemXXXX ls "sd:/GAMES"
 cargo run -p edlink-cli -- --port /dev/cu.usbmodemXXXX cp local.pce "sd:GAMES/local.pce"
 cargo run -p edlink-cli -- --port /dev/cu.usbmodemXXXX run "sd:GAMES/local.pce"
+cargo run -p edlink-cli -- --port /dev/cu.usbmodemXXXX mv "sd:GAMES/old.pce" "sd:GAMES/new.pce"
+cargo run -p edlink-cli -- --port /dev/cu.usbmodemXXXX rm "sd:GAMES/new.pce"
 
 # Capturer la trame série brute (validation protocole sur vraie carte) :
 EDLINK_TRACE=1 cargo run -p edlink-cli -- --port /dev/cu.usbmodemXXXX ls "sd:/GAMES"

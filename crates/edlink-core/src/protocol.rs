@@ -35,6 +35,7 @@ pub const CMD_F_FWR: u8 = 0xCC;
 pub const CMD_F_FCLOSE: u8 = 0xCE;
 pub const CMD_F_AVB: u8 = 0xD5;
 pub const CMD_F_DIR_MK: u8 = 0xD2;
+pub const CMD_F_DEL: u8 = 0xD3; // supprime fichier ou dossier (vide)
 
 // ---- Flags d'accès fichiers (FatFs-like) ----
 pub const FA_READ: u8 = 0x01;

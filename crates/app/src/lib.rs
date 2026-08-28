@@ -119,6 +119,8 @@ pub fn run() {
             upload,
             download,
             list_sd,
+            delete_sd,
+            rename_sd,
             run_rom,
             load_rom,
             reset_console,
@@ -323,6 +325,22 @@ fn list_sd(state: State<'_, AppState>, path: String) -> Result<Vec<SdEntry>, Str
             })
             .collect()
     })
+}
+
+/// Supprime un fichier (ou dossier vide) de la carte SD.
+#[tauri::command]
+fn delete_sd(state: State<'_, AppState>, path: String) -> Result<String, String> {
+    let dev = normalize_sd_path(&path);
+    with_ted(&state, |t| t.delete_file(&dev)).map(|_| format!("{dev} effacé"))
+}
+
+/// Renomme un fichier de la carte SD (reste dans le même dossier).
+#[tauri::command]
+fn rename_sd(state: State<'_, AppState>, path: String, new_name: String) -> Result<String, String> {
+    let old = normalize_sd_path(&path);
+    let parent = old.rsplit_once('/').map(|(p, _)| p).unwrap_or("sd:");
+    let new_path = format!("{parent}/{new_name}");
+    with_ted(&state, |t| t.rename_file(&old, &new_path)).map(|_| new_path)
 }
 
 /// Déploie et lance un jeu (chemin local ou `sd:...`).

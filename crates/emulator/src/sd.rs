@@ -72,6 +72,17 @@ impl VirtualSd {
         Ok(true)
     }
 
+    /// Supprime un fichier, ou un dossier (récursivement — FatFs réel refuse
+    /// un dossier non vide, mais ce n'est qu'un émulateur de test).
+    pub fn delete(&self, dev_path: &str) -> io::Result<()> {
+        let p = self.resolve(dev_path);
+        if p.is_dir() {
+            fs::remove_dir_all(p)
+        } else {
+            fs::remove_file(p)
+        }
+    }
+
     /// Liste les entrées d'un dossier (nom, est-un-dossier, taille en octets).
     /// Ignore les entrées cachées (nom commençant par '.'). Si le dossier
     /// n'existe pas, renvoie une liste vide.

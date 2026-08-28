@@ -48,6 +48,7 @@ const CMD_F_FRD: u8 = 0xCA;
 const CMD_F_FWR: u8 = 0xCC;
 const CMD_F_FCLOSE: u8 = 0xCE;
 const CMD_F_DIR_MK: u8 = 0xD2;
+const CMD_F_DEL: u8 = 0xD3;
 const CMD_F_AVB: u8 = 0xD5;
 
 const FA_WRITE: u8 = 0x02;
@@ -239,6 +240,14 @@ impl Device {
                     let path = read_string(master)?;
                     println!("[cmd] F_DIR_MK path={path:?}");
                     self.dir_make(&path);
+                }
+                CMD_F_DEL => {
+                    let path = read_string(master)?;
+                    println!("[cmd] F_DEL path={path:?}");
+                    self.status = match self.sd.delete(&path) {
+                        Ok(()) => FR_OK,
+                        Err(_) => 2, // FR_NO_FILE
+                    };
                 }
                 CMD_F_DIR_OPN => {
                     let path = read_string(master)?;

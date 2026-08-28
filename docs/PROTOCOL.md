@@ -52,6 +52,7 @@ Référence : `Link.cs → GetDeviceConfig()` / `GetID()`.
 | `CMD_F_FCLOSE` | 0xCE | Fermeture fichier | `DeviceIO_V1.FileClose` |
 | `CMD_F_AVB` | 0xD5 | Taille fichier | `DeviceIO_V1.FileAvailable` |
 | `CMD_F_DIR_MK` | 0xD2 | Créer dossier | `DeviceIO_V1.DirMake` |
+| `CMD_F_DEL` | 0xD3 | Effacer fichier/dossier vide | `turbolink.exe DeviceIO.delRecord` |
 | `CMD_F_DIR_OPN` | 0xC3 | Ouvrir dossier | `turbolink.exe DeviceIO.dirOpen` (cf. ci‑dessous) |
 | `CMD_F_DIR_RD` | 0xC4 | Lire une entrée | `turbolink.exe DeviceIO.dirRead` (cf. ci‑dessous) |
 
@@ -66,6 +67,17 @@ Référence : `Link.cs → GetDeviceConfig()` / `GetID()`.
   acquittement (`TxDataACK`), puis statut final.
 - `MakePath` crée les sous‑dossiers parents (`DIR_MK`), en ignorant l'erreur 8
   (« dossier déjà existant »).
+- Suppression : `CMD_F_DEL` + chaîne + `CMD_STATUS`, même forme que `DIR_MK`
+  (`Ted::delete_file`). Confirmé par désassemblage de `turbolink.exe`
+  (`DeviceIO.delRecord`, RVA 0x3bc4) — testé de bout en bout contre
+  l'émulateur (`edlink-cli rm sd:/chemin`).
+- **Pas de renommage natif** : ni `reference/edlink` ni `turbolink.exe` (dont
+  tout le `DeviceIO` a été énuméré par désassemblage) n'exposent de commande
+  "rename"/"move". `Ted::rename_file` (utilisé par le menu contextuel de
+  l'explorateur SD et `edlink-cli mv`) est donc une **copie intégrale suivie
+  d'une suppression de l'original** (lecture + écriture complètes du fichier
+  via le buffer hôte) — pas atomique : une coupure en cours de route laisse
+  le fichier dupliqué (original + copie), jamais perdu.
 
 Référence : `DeviceIO_V1.cs` (FileOpen/Read/Write/…).
 

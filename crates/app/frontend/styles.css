@@ -163,6 +163,18 @@ button.btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; box-s
 .entry:hover .dlbtn { opacity: 1; }
 .entry .dlbtn:hover { border-color: var(--cyan); background: var(--panel-2); }
 
+/* Menu contextuel (clic droit sur un fichier de l'explorateur) */
+.ctxmenu { position: fixed; z-index: 500; min-width: 180px; padding: 6px;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.45), 0 0 0 1px rgba(34,224,255,0.08);
+  display: flex; flex-direction: column; gap: 2px; }
+.ctxmenu[hidden] { display: none; }
+.ctxmenu button { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left;
+  background: transparent; border: 1px solid transparent; color: var(--text); font-size: 13px;
+  padding: 8px 10px; border-radius: 7px; cursor: pointer; transition: all .12s; }
+.ctxmenu button:hover { background: var(--panel-2); border-color: var(--cyan); color: var(--cyan); }
+.ctxmenu button.danger:hover { border-color: var(--red); color: var(--red); }
+
 .explorer-empty { text-align: center; padding: 40px 16px; color: var(--muted); font-size: 13px; line-height: 1.7; }
 .explorer-status { padding: 8px 4px; font-size: 12px; color: var(--cyan); min-height: 16px; }
 .explorer-status.err { color: var(--red); }
