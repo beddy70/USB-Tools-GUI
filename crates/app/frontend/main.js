@@ -79,7 +79,8 @@ function askPrompt(message, defaultValue = "") {
 // État de l'explorateur de carte SD.
 let explorerPath = "";   // chemin SD courant ("" = racine)
 let explorerBusy = false;
-let explorerView = "grid"; // "grid" = icônes, "list" = liste
+let explorerView = "grid"; // "grid" = icônes, "list" = liste, "carousel" = pochettes
+let lastCarouselPath = null; // pour recentrer le carrousel (index 0) à chaque changement de dossier
 const EXPLORER_MTYPE = "text/x-ted-sd";
 let lastScreenB64 = null;  // dernière capture (base64)
 // Choix discrètes proposés par les curseurs de capture (index du curseur -> valeur).
@@ -310,7 +311,7 @@ async function renderExplorer() {
   let container;
   if (explorerView === "carousel") {
     container = renderCarousel(sorted);
-    if (!sorted.some((e) => e.is_dir || isRomFile(e))) {
+    if (!carouselItems.length) {
       els.explorerStatus.textContent =
         "Aucun jeu (.pce/.sgx/.rom/.bin) dans ce dossier — passez en vue liste pour tout voir.";
       els.explorer.appendChild(container);
@@ -434,46 +435,115 @@ function renderList(sorted) {
 }
 
 // ------------------------------------------------------------ vue carrousel
-// Pochettes (Libretro Thumbnails, cf. thumbnails.rs) : une carte par dossier
-// (navigation) et par fichier ROM connu (.pce/.sgx/.rom/.bin) — les autres
-// fichiers (sauvegardes, images…) sont omis de cette vue, pas du dossier.
+// Pochettes (Libretro Thumbnails, cf. thumbnails.rs), style « coverflow »
+// (EmulationStation/Batocera) : un dossier ou fichier ROM connu par carte,
+// celle du centre mise en avant, les autres réduites/estompées de part et
+// d'autre — navigation aux flèches, au clic sur une carte latérale, ou au
+// clavier (←/→ pour déplacer le centre, Entrée pour l'activer). Les fichiers
+// qui ne sont ni un dossier ni une ROM connue (sauvegardes, images…) sont
+// omis de cette vue seulement, pas du dossier lui-même.
 const boxartCache = new Map(); // nom de fichier -> data URI (ou null = introuvable)
+let carouselItems = [];
+let carouselIndex = 0;
 
 function renderCarousel(sorted) {
+  if (explorerPath !== lastCarouselPath) { carouselIndex = 0; lastCarouselPath = explorerPath; }
+  carouselItems = sorted.filter((e) => e.is_dir || isRomFile(e));
+  if (carouselIndex >= carouselItems.length) {
+    carouselIndex = Math.max(0, carouselItems.length - 1);
+  }
+  return buildCarouselDom();
+}
+
+function buildCarouselDom() {
   const wrap = document.createElement("div");
-  wrap.className = "carousel";
-  for (const entry of sorted) {
-    if (!entry.is_dir && !isRomFile(entry)) continue;
+  wrap.className = "carousel-wrap";
+
+  const prev = document.createElement("button");
+  prev.className = "carousel-nav prev"; prev.textContent = "‹"; prev.title = "Précédent";
+  prev.disabled = carouselItems.length < 2;
+  prev.addEventListener("click", () => shiftCarousel(-1));
+
+  const next = document.createElement("button");
+  next.className = "carousel-nav next"; next.textContent = "›"; next.title = "Suivant";
+  next.disabled = carouselItems.length < 2;
+  next.addEventListener("click", () => shiftCarousel(1));
+
+  const track = document.createElement("div");
+  track.className = "carousel-track";
+
+  carouselItems.forEach((entry, i) => {
+    const offset = i - carouselIndex;
+    if (Math.abs(offset) > 2) return; // hors champ — pas la peine de le poser dans le DOM
     const full = joinSdPath(explorerPath, entry.name);
+    const abs = Math.abs(offset);
 
     const card = document.createElement("div");
-    card.className = "boxart-card";
+    card.className = "carousel-card" + (offset === 0 ? " active" : "");
+    const scale = offset === 0 ? 1 : abs === 1 ? 0.74 : 0.55;
+    const opacity = offset === 0 ? 1 : abs === 1 ? 0.8 : 0.45;
+    card.style.transform = `translate(-50%, -50%) translateX(${offset * 148}px) scale(${scale})`;
+    card.style.opacity = String(opacity);
+    card.style.zIndex = String(10 - abs);
+
     const frame = document.createElement("div");
-    frame.className = "boxart-frame";
+    frame.className = "carousel-frame";
     const ph = document.createElement("div");
     ph.className = "boxart-ph";
     ph.textContent = entry.is_dir ? "📁" : "🎮";
     frame.appendChild(ph);
-    const name = document.createElement("div");
-    name.className = "boxart-name";
-    name.textContent = entry.name;
+    const label = document.createElement("div");
+    label.className = "carousel-label";
+    label.textContent = entry.name;
     card.appendChild(frame);
-    card.appendChild(name);
+    card.appendChild(label);
 
-    if (entry.is_dir) {
-      card.addEventListener("click", () => { explorerPath = full; renderExplorer(); });
-    } else {
-      card.addEventListener("click", () => openGameModal(entry, full));
+    card.addEventListener("click", () => {
+      if (offset !== 0) { carouselIndex = i; refreshCarouselDom(); return; }
+      if (entry.is_dir) { explorerPath = full; renderExplorer(); }
+      else openGameModal(entry, full);
+    });
+    if (!entry.is_dir) {
       card.addEventListener("contextmenu", (e) => {
         e.preventDefault();
         openCtxMenu(e.clientX, e.clientY, entry, full);
       });
       loadBoxartInto(entry.name, frame);
     }
-    wrap.appendChild(card);
-  }
+    track.appendChild(card);
+  });
+
+  wrap.appendChild(prev);
+  wrap.appendChild(track);
+  wrap.appendChild(next);
   return wrap;
 }
+
+function shiftCarousel(delta) {
+  if (!carouselItems.length) return;
+  carouselIndex = Math.max(0, Math.min(carouselItems.length - 1, carouselIndex + delta));
+  refreshCarouselDom();
+}
+
+// Reconstruit uniquement le carrousel (sans relister la carte) : navigation
+// instantanée aux flèches/clavier.
+function refreshCarouselDom() {
+  const old = els.explorer.querySelector(".carousel-wrap");
+  if (old) old.replaceWith(buildCarouselDom());
+}
+
+document.addEventListener("keydown", (e) => {
+  if (explorerView !== "carousel" || !$("tab-transfer").classList.contains("active")) return;
+  if (e.key === "ArrowLeft") { e.preventDefault(); shiftCarousel(-1); }
+  else if (e.key === "ArrowRight") { e.preventDefault(); shiftCarousel(1); }
+  else if (e.key === "Enter") {
+    const entry = carouselItems[carouselIndex];
+    if (!entry) return;
+    const full = joinSdPath(explorerPath, entry.name);
+    if (entry.is_dir) { explorerPath = full; renderExplorer(); }
+    else openGameModal(entry, full);
+  }
+});
 
 // Récupère la jaquette (cache mémoire -> commande Tauri, elle-même mise en
 // cache disque côté Rust) et l'insère dans `frame` si trouvée ; sinon laisse
