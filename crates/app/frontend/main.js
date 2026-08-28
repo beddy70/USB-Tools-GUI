@@ -740,7 +740,7 @@ async function loadBoxartInto(romName, frame, seq) {
 
 let gameModalTarget = null; // { entry, full }
 
-// Écran-titre / capture en jeu : alternent toutes les secondes dans la fiche
+// Écran-titre / capture en jeu : alternent toutes les 2 secondes dans la fiche
 // de détail quand les deux sont disponibles (sinon la seule trouvée reste
 // affichée fixe).
 let gameSnapTimer = null;
@@ -777,7 +777,7 @@ function startSnapSlideshow(images) {
     gameSnapTimer = setInterval(() => {
       gameSnapIndex = (gameSnapIndex + 1) % gameSnapImages.length;
       showGameSnapFrame();
-    }, 1000);
+    }, 2000);
   }
 }
 
