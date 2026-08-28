@@ -93,7 +93,11 @@
   select.status[data-v="ok"] { color: var(--ok); }
   select.status[data-v="bad"] { color: var(--bad); }
   select.status[data-v="na"] { color: var(--na); }
-  input.comment { width: 100%; }
+  /* Zone de commentaire par ligne : redimensionnable en hauteur, compacte par
+     défaut (une ligne) — la règle `textarea { min-height: 70px }` ci-dessus
+     ne doit pas s'appliquer ici. */
+  textarea.comment { width: 100%; min-height: 34px; height: 34px; resize: vertical;
+    line-height: 1.4; padding: 7px 11px; }
 
   details.section-toggle { margin-bottom: 4px; }
   details.section-toggle > summary { cursor: pointer; font-size: 13px; color: var(--muted); padding: 4px 0; }
@@ -410,9 +414,9 @@
 
       const tdComment = document.createElement("td");
       tdComment.className = "col-comment";
-      const inp = document.createElement("input");
-      inp.type = "text";
+      const inp = document.createElement("textarea");
       inp.className = "comment";
+      inp.rows = 1;
       inp.placeholder = "…";
       inp.value = r.comment;
       inp.addEventListener("input", () => { r.comment = inp.value; saveState(); });
