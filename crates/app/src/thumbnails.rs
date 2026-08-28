@@ -298,18 +298,64 @@ fn similarity(a: &str, b: &str) -> f64 {
     strsim::normalized_levenshtein(&a, &b).max(partial_ratio(&a, &b))
 }
 
+/// Éclate un titre « Principal - Sous-titre (Région) » en ses segments, le
+/// titre entier étant toujours inclus en premier. Convention No-Intro très
+/// courante côté PC Engine : beaucoup de jeux japonais sont référencés ainsi
+/// (ex. « Narazumono Sentou Butai - Bloody Wolf (Japan) »), et le nom utilisé
+/// par les dumps ROM correspond souvent à **un seul** des deux segments — pas
+/// toujours le même côté (parfois le titre japonais d'origine, parfois le
+/// titre/sous-titre anglais) — d'où la comparaison des deux indépendamment,
+/// en plus de la chaîne entière.
+fn title_segments(title: &str) -> Vec<&str> {
+    let mut out = vec![title];
+    if let Some(idx) = title.find(" - ") {
+        let (a, b) = (title[..idx].trim(), title[idx + 3..].trim());
+        if !a.is_empty() {
+            out.push(a);
+        }
+        if !b.is_empty() {
+            out.push(b);
+        }
+    }
+    out
+}
+
+/// Score d'un candidat (titre complet, tel que dans le dépôt) face à une
+/// variante du nom cherché :
+/// - titre entier : [`similarity`] (Levenshtein + ratio partiel — un ajout de
+///   préfixe/suffixe est attendu à ce niveau, ex. code de région) ;
+/// - segments ([`title_segments`]) : Levenshtein strict *seul*, sans ratio
+///   partiel. Un segment est déjà l'unité la plus fine (un titre autonome à
+///   comparer dans son ensemble) — l'y appliquer quand même transformerait
+///   un simple mot commun et court (« Bomberman », partagé par plusieurs
+///   jeux distincts : « Bomberman '93 », « Bomberman - Users Battle »…) en
+///   faux positif à 100%, puisqu'il serait trivialement trouvé comme
+///   sous-chaîne de presque n'importe quelle variante commençant par ce mot.
+fn candidate_score(variant: &str, full: &str) -> f64 {
+    let mut best = similarity(variant, full);
+    let variant_lc = variant.to_lowercase();
+    for seg in title_segments(full).into_iter().skip(1) {
+        let score = strsim::normalized_levenshtein(&variant_lc, &seg.to_lowercase());
+        if score > best {
+            best = score;
+        }
+    }
+    best
+}
+
 /// Le titre le plus proche de `stem` dans `candidates`, si son score dépasse
 /// [`FUZZY_THRESHOLD`]. Essaie aussi les variantes de région de `stem`
 /// ([`name_variants`]) : un stem exprimé en code court (« (J) ») se compare
 /// souvent mieux une fois étendu (« (Japan) »), la base Libretro utilisant
-/// systématiquement la forme longue.
+/// systématiquement la forme longue. L'URL/le cache utilisent toujours le
+/// **titre complet**, seul vrai nom de fichier dans le dépôt.
 fn best_fuzzy_match(stem: &str, candidates: &[String]) -> Option<(String, f64)> {
     name_variants(stem)
         .iter()
         .filter_map(|variant| {
             candidates
                 .iter()
-                .map(|c| (c.clone(), similarity(variant, c)))
+                .map(|full| (full.clone(), candidate_score(variant, full)))
                 .filter(|(_, score)| *score >= FUZZY_THRESHOLD)
                 .max_by(|a, b| a.1.total_cmp(&b.1))
         })
@@ -421,6 +467,20 @@ mod tests {
         let m = tauri::async_runtime::block_on(fetch(&dir, "Cyber Cross (J).pce", Kind::Boxart));
         let m = m.expect("attendu : correspondance approchée trouvée malgré le préfixe");
         assert!(m.matched_title.contains("Cyber Cross"));
+        println!("matched: {} ({:.0}%)", m.matched_title, m.score * 100.0);
+    }
+
+    // Autre cas de titre "Principal - Sous-titre" : ici le nom de ROM
+    // correspond au PREMIER segment (le titre japonais), pas au second —
+    // vérifie que title_segments() ne favorise pas arbitrairement un côté.
+    #[test]
+    #[ignore]
+    fn fetch_fuzzy_fallback_matches_first_segment() {
+        let dir = std::env::temp_dir().join("edlink-thumb-test-fuzzy-seg1");
+        let _ = std::fs::remove_dir_all(&dir);
+        let m = tauri::async_runtime::block_on(fetch(&dir, "Bull Fight (J).pce", Kind::Boxart));
+        let m = m.expect("attendu : correspondance approchée trouvée sur le premier segment");
+        assert!(m.matched_title.contains("Bull Fight"));
         println!("matched: {} ({:.0}%)", m.matched_title, m.score * 100.0);
     }
 }
