@@ -1381,18 +1381,15 @@ $("save-screen").addEventListener("click", async () => {
     if (r) {
       const sx = geom.cw * z, sy = geom.ch * z;
       const rx = r.x0 * sx, ry = r.y0 * sy, rw = (r.x1 - r.x0 + 1) * sx, rh = (r.y1 - r.y0 + 1) * sy;
-      // Isole la sélection : assombrit tout le reste (trou dans le remplissage,
-      // règle even-odd) puis contour la zone choisie.
+      // Contour de la sélection uniquement : le reste de la planche n'est pas
+      // assombri (utilisez « 🔒 Locker » pour vraiment isoler la sélection).
       ctx.save();
-      ctx.beginPath();
-      ctx.rect(0, 0, cv.width, cv.height);
-      ctx.rect(rx, ry, rw, rh);
-      ctx.fillStyle = "rgba(0,0,0,0.55)";
-      ctx.fill("evenodd");
-      ctx.restore();
       ctx.strokeStyle = "#22e0ff";
       ctx.lineWidth = 2;
+      ctx.shadowColor = "#22e0ff";
+      ctx.shadowBlur = 6;
       ctx.strokeRect(rx + 1, ry + 1, rw - 2, rh - 2);
+      ctx.restore();
     }
   }
 
