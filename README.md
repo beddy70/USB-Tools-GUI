@@ -1,5 +1,7 @@
 # 🕹️ Turbo Everdrive USB Tools GUI
 
+*[English version](README.en.md)*
+
 Outil graphique **cross‑platform** pour la carte **Turbo EverDrive Pro / Core**
 (PC‑Engine / TurboGrafx‑16), construit avec un backend **Rust** et une interface
 **Tauri** (WebView).
@@ -327,7 +329,8 @@ Reprend la palette « retrowave » de l'application.
   interface réactive) + barre de progression ; visualiseur mémoire (RAM en mode
   conservateur sur matériel, VRAM/CRAM via `*v`) ; planche de tuiles VRAM
   (sprites) ; détection émulateur/matériel ; version de build injectée à la
-  compilation ; grille de test QA autonome (`docs/qa-checklist.html`).
+  compilation ; grille de test QA autonome (`docs/qa-checklist.html`) ;
+  localisation complète FR/EN/DE/ES de l'interface.
 - **M3** Sauvegarde/chargement de HuCard complète (via `memrd`/`memwr`), tests
   de vitesse USB (`usbspd`), diagnostics (`diag`).
 - **M4** Packager/icônes finales, intégration continue, validations multiplateforme.

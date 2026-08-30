@@ -1,5 +1,7 @@
 # edlink-emulator — Émulateur virtuel Turbo EverDrive (Pro / Core)
 
+*[English version](README.en.md)*
+
 Émulateur logiciel d'une **Turbo EverDrive Pro / Core** pour développer et tester
 l'outil (`edlink-cli`, interface Tauri) **sans matériel**.
 
