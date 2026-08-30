@@ -16,40 +16,43 @@
           <span class="sub">PC-Engine / TurboGrafx-16 · Turbo Everdrive Pro</span>
         </div>
       </div>
-      <div class="conn-status" id="conn-status">
-        <span class="dot" id="conn-dot"></span>
-        <span id="conn-label">Déconnecté</span>
+      <div class="topbar-right">
+        <select id="lang-select" class="lang-select" title="Language / Langue"></select>
+        <div class="conn-status" id="conn-status">
+          <span class="dot" id="conn-dot"></span>
+          <span id="conn-label">Déconnecté</span>
+        </div>
       </div>
     </header>
 
     <div class="layout">
       <aside class="sidebar">
         <nav>
-          <button class="tab-btn active" data-tab="connect"><span>🔌</span> Connexion</button>
-          <button class="tab-btn" data-tab="games"><span>🕹️</span> GAMES</button>
-          <button class="tab-btn" data-tab="transfer"><span>📤</span> Carte SD</button>
-          <button class="tab-btn" data-tab="play"><span>🎮</span> Jouer</button>
-          <button class="tab-btn" data-tab="memory"><span>🧠</span> Mémoire</button>
-          <button class="tab-btn" data-tab="sprites"><span>🧩</span> Sprites</button>
+          <button class="tab-btn active" data-tab="connect"><span>🔌</span> <span data-i18n="nav.connect">Connexion</span></button>
+          <button class="tab-btn" data-tab="games"><span>🕹️</span> <span data-i18n="nav.games">GAMES</span></button>
+          <button class="tab-btn" data-tab="transfer"><span>📤</span> <span data-i18n="nav.transfer">Carte SD</span></button>
+          <button class="tab-btn" data-tab="play"><span>🎮</span> <span data-i18n="nav.play">Jouer</span></button>
+          <button class="tab-btn" data-tab="memory"><span>🧠</span> <span data-i18n="nav.memory">Mémoire</span></button>
+          <button class="tab-btn" data-tab="sprites"><span>🧩</span> <span data-i18n="nav.sprites">Sprites</span></button>
         </nav>
-        <div class="sidebar-footer" id="app-version" title="Version de l'application">v0.1.1-alpha</div>
+        <div class="sidebar-footer" id="app-version" data-i18n-title="nav.appVersionTitle" title="Version de l'application">v0.1.1-alpha</div>
       </aside>
 
       <main class="content">
         <!-- CONNEXION -->
         <section id="tab-connect" class="tab-panel active">
-          <h2>Connexion à la carte</h2>
+          <h2 data-i18n="connect.title">Connexion à la carte</h2>
           <div class="row">
-            <label for="port-select">Port série</label>
+            <label for="port-select" data-i18n="connect.portLabel">Port série</label>
             <select id="port-select"></select>
             <button class="btn ghost" id="refresh-ports">⟳</button>
-            <button class="btn primary" id="connect-btn">Connecter</button>
-            <button class="btn danger ghost" id="disconnect-btn">Déconnecter</button>
+            <button class="btn primary" id="connect-btn" data-i18n="connect.connect">Connecter</button>
+            <button class="btn danger ghost" id="disconnect-btn" data-i18n="connect.disconnect">Déconnecter</button>
           </div>
           <div class="row">
-            <label for="port-manual">Port manuel (émulateur / PTY)</label>
+            <label for="port-manual" data-i18n="connect.manualLabel">Port manuel (émulateur / PTY)</label>
             <input id="port-manual" type="text" placeholder="/dev/ttys001" />
-            <span class="hint">Pour l'émulateur virtuel (edlink-emulator), saisissez ici le chemin du port virtuel affiché au lancement. Vide = liste ci-dessus.</span>
+            <span class="hint" data-i18n="connect.manualHint">Pour l'émulateur virtuel (edlink-emulator), saisissez ici le chemin du port virtuel affiché au lancement. Vide = liste ci-dessus.</span>
           </div>
           <div class="card info-card" id="info-card" hidden>
             <pre id="info-text"></pre>
@@ -58,32 +61,32 @@
 
         <!-- GAMES : navigateur catégories -> mosaïque -->
         <section id="tab-games" class="tab-panel">
-          <h2>Jeux par catégorie</h2>
+          <h2 data-i18n="games.title">Jeux par catégorie</h2>
           <div class="explorer" id="games-explorer"></div>
         </section>
 
         <!-- TRANSFERT : EXPLORATEUR -->
         <section id="tab-transfer" class="tab-panel">
-          <h2>Explorateur de carte SD</h2>
+          <h2 data-i18n="sd.explorerTitle">Explorateur de carte SD</h2>
           <div class="explorer-toolbar">
             <div class="crumbs" id="crumbs"></div>
-            <button class="btn ghost" id="explorer-up" title="Dossier parent">⬆</button>
-            <button class="btn ghost" id="explorer-refresh" title="Actualiser">⟳</button>
+            <button class="btn ghost" id="explorer-up" data-i18n-title="sd.parentFolderTitle" title="Dossier parent">⬆</button>
+            <button class="btn ghost" id="explorer-refresh" data-i18n-title="sd.refreshTitle" title="Actualiser">⟳</button>
             <div class="view-toggle">
-              <button class="btn ghost view-btn active" id="view-icons" title="Vue en icônes">▦</button>
-              <button class="btn ghost view-btn" id="view-list" title="Vue en liste">☰</button>
+              <button class="btn ghost view-btn active" id="view-icons" data-i18n-title="sd.gridViewTitle" title="Vue en icônes">▦</button>
+              <button class="btn ghost view-btn" id="view-list" data-i18n-title="sd.listViewTitle" title="Vue en liste">☰</button>
             </div>
-            <button class="btn primary" id="explorer-import">📂 Importer…</button>
+            <button class="btn primary" id="explorer-import" data-i18n="sd.import">📂 Importer…</button>
           </div>
 
           <div class="explorer" id="explorer">
             <div class="explorer-empty" id="explorer-empty" hidden>
-              <p><strong>Glissez-déposez</strong> des fichiers ici pour les envoyer sur la carte,<br />ou cliquez sur « 📂 Importer… ».</p>
+              <p><strong data-i18n-html="sd.dropHint">Glissez-déposez des fichiers ici pour les envoyer sur la carte,<br />ou cliquez sur « 📂 Importer… ».</strong></p>
             </div>
           </div>
           <div class="transfer-bar" id="transfer-bar" hidden>
             <div class="transfer-head">
-              <span class="transfer-label" id="transfer-label">Transfert…</span>
+              <span class="transfer-label" id="transfer-label" data-i18n="sd.transferring">Transfert…</span>
               <span class="transfer-pct" id="transfer-pct"></span>
             </div>
             <div class="transfer-track"><div class="transfer-fill" id="transfer-fill"></div></div>
@@ -92,68 +95,68 @@
 
           <!-- Menu contextuel (clic droit sur un fichier) -->
           <div class="ctxmenu" id="sd-ctxmenu" hidden>
-            <button data-action="play">▶ Jouer</button>
-            <button data-action="rename">✏️ Renommer…</button>
-            <button data-action="download">⬇ Télécharger…</button>
-            <button class="danger" data-action="delete">🗑 Effacer</button>
+            <button data-action="play" data-i18n="sd.ctxPlay">▶ Jouer</button>
+            <button data-action="rename" data-i18n="sd.ctxRename">✏️ Renommer…</button>
+            <button data-action="download" data-i18n="sd.ctxDownload">⬇ Télécharger…</button>
+            <button class="danger" data-action="delete" data-i18n="sd.ctxDelete">🗑 Effacer</button>
           </div>
         </section>
 
         <!-- JOUER -->
         <section id="tab-play" class="tab-panel">
-          <h2>Lancer un jeu</h2>
+          <h2 data-i18n="play.title">Lancer un jeu</h2>
           <div class="row">
-            <label for="rom-path">ROM (local ou sd:chemin)</label>
-            <input id="rom-path" type="text" placeholder="Choisir via le bouton…" readonly />
-            <button class="btn primary" id="pick-rom">▶ Choisir et lancer…</button>
+            <label for="rom-path" data-i18n="play.romLabel">ROM (local ou sd:chemin)</label>
+            <input id="rom-path" type="text" data-i18n-placeholder="play.romPlaceholder" placeholder="Choisir via le bouton…" readonly />
+            <button class="btn primary" id="pick-rom" data-i18n="play.pickAndRun">▶ Choisir et lancer…</button>
           </div>
           <div class="row">
-            <button class="btn warning" id="reset-btn">⟲ Reset console</button>
-            <button class="btn primary" id="screen-btn">📷 Capturer l'écran</button>
+            <button class="btn warning" id="reset-btn" data-i18n="play.resetConsole">⟲ Reset console</button>
+            <button class="btn primary" id="screen-btn" data-i18n="play.captureScreen">📷 Capturer l'écran</button>
           </div>
           <div class="card screen-card" id="screen-card" hidden>
-            <h3>Capture du menu</h3>
+            <h3 data-i18n="play.menuCaptureTitle">Capture du menu</h3>
             <div class="screen-settings">
-              <h4>Réglages de l'image</h4>
-              <p class="hint">Rendu logiciel du plan de tuiles (BG1) à partir de la VRAM/CRAM déjà capturée : ces réglages ne relisent pas la carte. « 📷 Capturer l'écran » reprend un instantané.</p>
+              <h4 data-i18n="play.imageSettings">Réglages de l'image</h4>
+              <p class="hint" data-i18n="play.imageSettingsHint">Rendu logiciel du plan de tuiles (BG1) à partir de la VRAM/CRAM déjà capturée : ces réglages ne relisent pas la carte. « 📷 Capturer l'écran » reprend un instantané.</p>
               <div class="screen-grid">
                 <label class="sctl" for="bat-w">
-                  <span class="sname">Taille BAT — largeur <em>(tuiles)</em></span>
+                  <span class="sname" data-i18n-html="play.batWidth">Taille BAT — largeur <em>(tuiles)</em></span>
                   <span class="srow">
                     <input type="range" id="bat-w" min="0" max="2" step="1" value="1" />
                     <span class="sval" id="bat-w-val">64</span>
                   </span>
                 </label>
                 <label class="sctl" for="bat-h">
-                  <span class="sname">Taille BAT — hauteur <em>(tuiles)</em></span>
+                  <span class="sname" data-i18n-html="play.batHeight">Taille BAT — hauteur <em>(tuiles)</em></span>
                   <span class="srow">
                     <input type="range" id="bat-h" min="0" max="1" step="1" value="0" />
                     <span class="sval" id="bat-h-val">32</span>
                   </span>
                 </label>
                 <label class="sctl" for="res-w">
-                  <span class="sname">Résolution — largeur <em>(px)</em></span>
+                  <span class="sname" data-i18n-html="play.resWidth">Résolution — largeur <em>(px)</em></span>
                   <span class="srow">
                     <input type="range" id="res-w" min="0" max="4" step="1" value="1" />
                     <span class="sval" id="res-w-val">320</span>
                   </span>
                 </label>
                 <label class="sctl" for="res-h">
-                  <span class="sname">Résolution — hauteur <em>(px)</em></span>
+                  <span class="sname" data-i18n-html="play.resHeight">Résolution — hauteur <em>(px)</em></span>
                   <span class="srow">
                     <input type="range" id="res-h" min="0" max="1" step="1" value="0" />
                     <span class="sval" id="res-h-val">224</span>
                   </span>
                 </label>
                 <label class="sctl" for="scroll-x">
-                  <span class="sname">Défilement horizontal <em>(px)</em></span>
+                  <span class="sname" data-i18n-html="play.scrollX">Défilement horizontal <em>(px)</em></span>
                   <span class="srow">
                     <input type="range" id="scroll-x" min="0" max="511" step="1" value="0" />
                     <span class="sval" id="scroll-x-val">0</span>
                   </span>
                 </label>
                 <label class="sctl" for="scroll-y">
-                  <span class="sname">Défilement vertical <em>(px)</em></span>
+                  <span class="sname" data-i18n-html="play.scrollY">Défilement vertical <em>(px)</em></span>
                   <span class="srow">
                     <input type="range" id="scroll-y" min="0" max="511" step="1" value="0" />
                     <span class="sval" id="scroll-y-val">0</span>
@@ -163,20 +166,20 @@
             </div>
             <img id="screen-img" alt="Capture" />
             <div class="row">
-              <button class="btn ghost" id="save-screen">💾 Enregistrer le PNG…</button>
+              <button class="btn ghost" id="save-screen" data-i18n="play.saveScreen">💾 Enregistrer le PNG…</button>
             </div>
           </div>
         </section>
 
         <!-- MEMOIRE -->
         <section id="tab-memory" class="tab-panel">
-          <h2>Visualiseur mémoire (lecture seule)</h2>
+          <h2 data-i18n="mem.title">Visualiseur mémoire (lecture seule)</h2>
           <div class="mem-subtabs" id="mem-subtabs">
-            <button class="mem-subtab active" data-memview="ram">🗂 Mémoire (vue actuelle)</button>
-            <button class="mem-subtab" data-memview="vram">🖥 VRAM (VDC)</button>
-            <button class="mem-subtab" data-memview="cram">🎨 CRAM (VCE)</button>
+            <button class="mem-subtab active" data-memview="ram" data-i18n="mem.subtabRam">🗂 Mémoire (vue actuelle)</button>
+            <button class="mem-subtab" data-memview="vram" data-i18n="mem.subtabVram">🖥 VRAM (VDC)</button>
+            <button class="mem-subtab" data-memview="cram" data-i18n="mem.subtabCram">🎨 CRAM (VCE)</button>
           </div>
-          <p class="mem-warning" id="mem-warning" hidden>
+          <p class="mem-warning" id="mem-warning" hidden data-i18n-html="mem.warningHtml">
             ⚠️ Matériel réel : la vue <strong>Mémoire</strong> parcourt le bus
             cartouche et <strong>gèle brièvement le CPU PC-Engine</strong> à
             chaque lecture — rien n'est lu automatiquement, utilisez
@@ -186,32 +189,32 @@
           </p>
           <p class="hint" id="mem-hint"></p>
           <div class="hex-toolbar">
-            <label for="mem-go">Aller à 0x</label>
+            <label for="mem-go" data-i18n="mem.goToLabel">Aller à 0x</label>
             <input id="mem-go" class="hex-go" type="text" value="$000000" spellcheck="false" />
-            <button class="btn ghost" id="mem-go-btn">Aller</button>
+            <button class="btn ghost" id="mem-go-btn" data-i18n="mem.go">Aller</button>
             <span class="mem-bank-ctrl" id="mem-bank-ctrl">
-              <label for="mem-bank">bank n°</label>
+              <label for="mem-bank" data-i18n="mem.bankLabel">bank n°</label>
               <input id="mem-bank" class="hex-go2" type="number" min="0" max="1023" value="0" />
-              <button class="btn ghost" id="mem-bank-btn">Aller</button>
+              <button class="btn ghost" id="mem-bank-btn" data-i18n="mem.go">Aller</button>
             </span>
-            <input id="mem-search" class="hex-search" type="text" placeholder="Rechercher hex/ascii…" spellcheck="false" />
+            <input id="mem-search" class="hex-search" type="text" data-i18n-placeholder="mem.searchPlaceholder" placeholder="Rechercher hex/ascii…" spellcheck="false" />
             <button class="btn ghost" id="mem-search-btn">🔎</button>
             <button class="btn ghost" id="mem-search-stop" hidden>⏹</button>
             <span class="hex-pos" id="mem-pos"></span>
-            <button class="btn ghost" id="mem-refresh" title="Relire les données de la vue courante depuis l'émulateur">🔄 Rafraîchir</button>
-            <button class="btn ghost" id="mem-save">💾 Sauver…</button>
+            <button class="btn ghost" id="mem-refresh" data-i18n-title="mem.refreshTitle" title="Relire les données de la vue courante depuis l'émulateur" data-i18n="mem.refresh">🔄 Rafraîchir</button>
+            <button class="btn ghost" id="mem-save" data-i18n="mem.save">💾 Sauver…</button>
           </div>
           <div class="mem-layout">
             <aside class="vec-panel" id="vec-panel">
-              <h3>Vecteurs d'interruption <span class="vec-chip">PC-Engine</span></h3>
-              <p class="vec-note">HuC6280 · banque 0 · à partir de <span class="mono">$1FF6</span> · valeurs lues en RAM</p>
+              <h3><span data-i18n="mem.vectorsTitle">Vecteurs d'interruption</span> <span class="vec-chip" data-i18n="mem.vectorsChip">PC-Engine</span></h3>
+              <p class="vec-note" data-i18n-html="mem.vectorsNoteHtml">HuC6280 · banque 0 · à partir de <span class="mono">$1FF6</span> · valeurs lues en RAM</p>
               <ul class="vec-list" id="vec-list"></ul>
             </aside>
             <div class="hex-wrap">
               <div class="hex-head">
-                <span class="h-off" id="h-off">Offset</span>
+                <span class="h-off" id="h-off" data-i18n="mem.offset">Offset</span>
                 <span class="h-hex" id="h-hex">00 01 02 03 04 05 06 07 08 09 0A 0B 0C 0D 0E 0F</span>
-                <span class="h-asc" id="h-asc">ASCII</span>
+                <span class="h-asc" id="h-asc" data-i18n="mem.ascii">ASCII</span>
               </div>
               <div class="hex-view" id="hex-view">
                 <div class="hex-spacer" id="hex-spacer"></div>
@@ -222,8 +225,8 @@
 
         <!-- SPRITES / TUILES VRAM -->
         <section id="tab-sprites" class="tab-panel">
-          <h2>Planche de tuiles VRAM</h2>
-          <p class="hint">
+          <h2 data-i18n="sprites.title">Planche de tuiles VRAM</h2>
+          <p class="hint" data-i18n-html="sprites.hintHtml">
             Décodage de l'instantané VRAM (64 Ko) en grille de cellules 4 bpp.
             Les <strong>motifs de sprites</strong> (comme ceux de fond) sont
             stockés dans la VRAM : repérez-les visuellement, cliquez une cellule
@@ -236,36 +239,36 @@
           </p>
 
           <div class="spr-toolbar">
-            <label>Cellule
+            <label><span data-i18n="sprites.cellLabel">Cellule</span>
               <select id="spr-cell">
-                <option value="8x8">8×8 (fond)</option>
-                <option value="16x16" selected>16×16 (sprite)</option>
-                <option value="16x32">16×32 (sprite)</option>
-                <option value="16x64">16×64 (sprite)</option>
-                <option value="32x16">32×16 (sprite)</option>
-                <option value="32x32">32×32 (sprite)</option>
-                <option value="32x64">32×64 (sprite)</option>
+                <option value="8x8" data-i18n="sprites.cell8x8">8×8 (fond)</option>
+                <option value="16x16" selected data-i18n="sprites.cell16x16">16×16 (sprite)</option>
+                <option value="16x32" data-i18n="sprites.cell16x32">16×32 (sprite)</option>
+                <option value="16x64" data-i18n="sprites.cell16x64">16×64 (sprite)</option>
+                <option value="32x16" data-i18n="sprites.cell32x16">32×16 (sprite)</option>
+                <option value="32x32" data-i18n="sprites.cell32x32">32×32 (sprite)</option>
+                <option value="32x64" data-i18n="sprites.cell32x64">32×64 (sprite)</option>
               </select>
             </label>
-            <label>Palette
+            <label><span data-i18n="sprites.paletteLabel">Palette</span>
               <select id="spr-pal"></select>
             </label>
-            <label>Colonnes
+            <label><span data-i18n="sprites.columnsLabel">Colonnes</span>
               <input id="spr-cols" type="number" min="1" max="64" value="16" />
             </label>
-            <label>Zoom
+            <label><span data-i18n="sprites.zoomLabel">Zoom</span>
               <input id="spr-zoom" type="range" min="1" max="8" step="1" value="3" />
               <span class="sval" id="spr-zoom-val">3×</span>
             </label>
-            <label class="spr-check"><input type="checkbox" id="spr-grid" checked /> Grille</label>
-            <label class="spr-check"><input type="checkbox" id="spr-transp" checked /> Index 0 transparent</label>
-            <button class="btn ghost" id="spr-refresh">🔄 Capturer</button>
-            <button class="btn ghost" id="spr-lock" title="N'afficher que la sélection (recadre la vue)" disabled>🔒 Locker</button>
-            <button class="btn ghost" id="spr-clear-sel" title="Effacer la sélection (Échap)">✕ Sélection</button>
-            <button class="btn ghost" id="spr-save">💾 PNG…</button>
+            <label class="spr-check"><input type="checkbox" id="spr-grid" checked /> <span data-i18n="sprites.gridCheck">Grille</span></label>
+            <label class="spr-check"><input type="checkbox" id="spr-transp" checked /> <span data-i18n="sprites.transparentCheck">Index 0 transparent</span></label>
+            <button class="btn ghost" id="spr-refresh" data-i18n="sprites.capture">🔄 Capturer</button>
+            <button class="btn ghost" id="spr-lock" data-i18n-title="sprites.lockTitle" title="N'afficher que la sélection (recadre la vue)" disabled data-i18n="sprites.lock">🔒 Locker</button>
+            <button class="btn ghost" id="spr-clear-sel" data-i18n-title="sprites.clearSelTitle" title="Effacer la sélection (Échap)" data-i18n="sprites.clearSel">✕ Sélection</button>
+            <button class="btn ghost" id="spr-save" data-i18n="sprites.save">💾 PNG…</button>
           </div>
 
-          <p class="hint" style="margin-bottom:8px">
+          <p class="hint" style="margin-bottom:8px" data-i18n-html="sprites.hint2Html">
             Cliquez une cellule, ou <strong>glissez</strong> pour sélectionner une
             plage — l'export PNG n'enregistre alors que la sélection.
             <strong>🔒 Locker</strong> recadre la vue sur la seule sélection (le
@@ -274,7 +277,7 @@
             <span class="mono">Échap</span> ou « ✕ Sélection » efface tout
             (et déverrouille).
           </p>
-          <div class="spr-info" id="spr-info">Aucune cellule sélectionnée.</div>
+          <div class="spr-info" id="spr-info" data-i18n="sprites.noSelection">Aucune cellule sélectionnée.</div>
 
           <div class="spr-canvas-wrap" id="spr-canvas-wrap">
             <canvas id="spr-canvas"></canvas>
@@ -284,7 +287,7 @@
       </main>
     </div>
 
-    <div class="splitter" id="splitter" title="Redimensionner"></div>
+    <div class="splitter" id="splitter" data-i18n-title="splitter.resizeTitle" title="Redimensionner"></div>
 
     <!-- Modale générique (confirmation / saisie) : remplace confirm()/prompt()
          natifs, non fiables dans une WebView embarquée (Tauri/WebView2/WKWebView
@@ -294,8 +297,8 @@
         <p class="modal-msg" id="modal-msg"></p>
         <input type="text" class="modal-input" id="modal-input" hidden />
         <div class="modal-actions">
-          <button class="btn ghost" id="modal-cancel">Annuler</button>
-          <button class="btn primary" id="modal-ok">OK</button>
+          <button class="btn ghost" id="modal-cancel" data-i18n="modal.cancel">Annuler</button>
+          <button class="btn primary" id="modal-ok" data-i18n="modal.ok">OK</button>
         </div>
       </div>
     </div>
@@ -303,7 +306,7 @@
     <!-- Fiche de détail d'un jeu (clic sur une pochette du carrousel) -->
     <div class="modal-backdrop" id="game-modal" hidden>
       <div class="modal-box game-box">
-        <button class="modal-close" id="game-modal-close" title="Fermer">✕</button>
+        <button class="modal-close" id="game-modal-close" data-i18n-title="games.closeTitle" title="Fermer">✕</button>
         <div class="game-box-body">
           <div class="game-boxart-wrap">
             <img id="game-boxart" alt="" />
@@ -318,8 +321,8 @@
               <span class="game-snap-label" id="game-snap-label"></span>
             </div>
             <div class="game-actions">
-              <button class="btn primary" id="game-play">▶ Jouer</button>
-              <button class="btn ghost" id="game-download">⬇ Télécharger</button>
+              <button class="btn primary" id="game-play" data-i18n="games.play">▶ Jouer</button>
+              <button class="btn ghost" id="game-download" data-i18n="games.download">⬇ Télécharger</button>
             </div>
           </div>
         </div>
@@ -327,10 +330,11 @@
     </div>
 
     <footer class="logbar">
-      <span class="log-title">Journal</span>
+      <span class="log-title" data-i18n="log.title">Journal</span>
       <div id="log" class="log"></div>
     </footer>
   </div>
+  <script src="i18n.js"></script>
   <script src="main.js"></script>
 </body>
 </html>

@@ -4,6 +4,14 @@
 const { core, event } = window.__TAURI__;
 const invoke = (cmd, args) => core.invoke(cmd, args);
 
+// Change de langue en cours d'utilisation (voir i18n.js) : les textes
+// statiques (data-i18n) se réappliquent seuls, mais les textes dynamiques
+// (journal déjà écrit, libellés calculés, onglets déjà rendus) doivent être
+// régénérés explicitement. Chaque module s'enregistre ici.
+const langChangeHandlers = [];
+function onLangChange(fn) { langChangeHandlers.push(fn); }
+document.addEventListener("i18n:changed", () => langChangeHandlers.forEach((fn) => fn()));
+
 const $ = (id) => document.getElementById(id);
 const els = {
   connDot: $("conn-dot"), connLabel: $("conn-label"),
@@ -137,8 +145,9 @@ async function safeInvoke(cmd, args, okMsg) {
 
 function setConnected(connected) {
   els.connDot.classList.toggle("on", connected);
-  els.connLabel.textContent = connected ? "Connecté" : "Déconnecté";
+  els.connLabel.textContent = connected ? t("conn.connected") : t("conn.disconnected");
 }
+onLangChange(() => setConnected(els.connDot.classList.contains("on")));
 
 // ---------------------------------------------------------------- onglets
 document.querySelectorAll(".tab-btn").forEach((btn) => {
@@ -168,7 +177,7 @@ async function refreshPorts() {
   if (ports && ports.length) {
     const opt = document.createElement("option");
     opt.value = "";
-    opt.textContent = "(auto)";
+    opt.textContent = t("connect.auto");
     els.portSelect.appendChild(opt);
     ports.forEach((p) => {
       const o = document.createElement("option");
@@ -177,7 +186,7 @@ async function refreshPorts() {
     });
   } else {
     const opt = document.createElement("option");
-    opt.value = ""; opt.textContent = "(aucun port)";
+    opt.value = ""; opt.textContent = t("connect.noPort");
     els.portSelect.appendChild(opt);
   }
 }
@@ -186,12 +195,12 @@ async function doConnect() {
   const manual = (els.portManual && els.portManual.value.trim()) || "";
   const port = manual || els.portSelect.value || null;
   if (!manual && !els.portSelect.value) {
-    log("Scan automatique en cours… (veuillez patienter quelques secondes)", "info");
+    log(t("connect.scanning"), "info");
   }
-  const info = await safeInvoke("connect", { port }, "Carte connectée");
+  const info = await safeInvoke("connect", { port }, t("connect.connectedLog"));
   if (!info) {
     if (!manual) {
-      log("Astuce : aucune carte trouvée automatiquement. Pour l'émulateur virtuel, tapez le port affiché au lancement (ex: /dev/ttys001) dans « Port manuel », puis recliquez Connecter.", "err");
+      log(t("connect.noAutoFound"), "err");
     }
     return;
   }
@@ -199,9 +208,9 @@ async function doConnect() {
   els.infoCard.hidden = false;
   els.infoText.textContent = info.info;
   isEmulator = !!info.is_emulator;
-  log(`Nom: ${info.name} · Port: ${info.port}${isEmulator ? " · émulateur" : ""}`, "info");
+  log(t("connect.nameLine", { name: info.name, port: info.port, emu: isEmulator ? t("connect.emulatorSuffix") : "" }), "info");
   if (!isEmulator) {
-    log("Matériel réel : la vue Mémoire est en mode conservateur (pas de lecture auto, clic « Rafraîchir »). VRAM/CRAM = instantané via le menu de la carte.", "info");
+    log(t("connect.realHardwareHint"), "info");
   }
   if (configureMemForDevice) configureMemForDevice(isEmulator);
   // Sur l'émulateur, la mémoire est observable sans coût : on relit tout de
@@ -210,13 +219,14 @@ async function doConnect() {
 }
 
 async function doDisconnect() {
-  await safeInvoke("disconnect", {}, "Déconnecté");
+  await safeInvoke("disconnect", {}, t("connect.disconnectedLog"));
   setConnected(false);
   els.infoCard.hidden = true;
   isEmulator = false;
   if (configureMemForDevice) configureMemForDevice(false);
 }
 
+onLangChange(refreshPorts);
 $("refresh-ports").addEventListener("click", refreshPorts);
 $("connect-btn").addEventListener("click", doConnect);
 $("disconnect-btn").addEventListener("click", doDisconnect);
@@ -251,9 +261,10 @@ function iconFor(entry) {
 }
 
 function fmtSize(b) {
-  if (b >= 1048576) return (b / 1048576).toFixed(1) + " Mo";
-  if (b >= 1024) return Math.round(b / 1024) + " Ko";
-  return b + " o";
+  const unit = currentLang === "en" ? { mb: " MB", kb: " KB", b: " B" } : { mb: " Mo", kb: " Ko", b: " o" };
+  if (b >= 1048576) return (b / 1048576).toFixed(1) + unit.mb;
+  if (b >= 1024) return Math.round(b / 1024) + unit.kb;
+  return b + unit.b;
 }
 
 function renderCrumbs() {
@@ -288,12 +299,12 @@ async function renderExplorer() {
   renderCrumbs();
   els.explorer.innerHTML = "";
   els.explorerEmpty.hidden = true;
-  els.explorerStatus.textContent = "Chargement de la carte…";
+  els.explorerStatus.textContent = t("sd.loading");
   els.explorerStatus.className = "explorer-status";
 
   const entries = await safeInvoke("list_sd", { path: explorerPath });
   if (!entries) {
-    els.explorerStatus.textContent = "Impossible de lister la carte. Vérifiez la connexion.";
+    els.explorerStatus.textContent = t("sd.listErr");
     els.explorerStatus.className = "explorer-status err";
     explorerBusy = false;
     return;
@@ -305,7 +316,7 @@ async function renderExplorer() {
 
   if (!sorted.length) {
     els.explorerEmpty.hidden = false;
-    els.explorerStatus.textContent = "Dossier vide — déposez des fichiers ici pour les envoyer.";
+    els.explorerStatus.textContent = t("sd.emptyFolder");
     explorerBusy = false;
     return;
   }
@@ -313,9 +324,10 @@ async function renderExplorer() {
   const container = explorerView === "list" ? renderList(sorted) : renderGrid(sorted);
   els.explorer.appendChild(container);
   els.explorerStatus.textContent =
-    `${sorted.length} élément(s) · ${explorerPath ? explorerPath : "racine"}`;
+    t("sd.itemCount", { count: sorted.length, path: explorerPath ? explorerPath : t("sd.root") });
   explorerBusy = false;
 }
+onLangChange(() => { if ($("tab-transfer").classList.contains("active")) renderExplorer(); });
 
 // ------------------------------------------------------------------ vue grille
 function renderGrid(sorted) {
@@ -325,14 +337,14 @@ function renderGrid(sorted) {
     const card = document.createElement("div");
     card.className = "entry" + (entry.is_dir ? " is-dir" : " is-file");
     card.draggable = !entry.is_dir; // seuls les fichiers se téléchargent
-    card.title = entry.is_dir ? "Ouvrir le dossier" : "Télécharger (double-clic ou ⬇)";
+    card.title = entry.is_dir ? t("sd.openFolder") : t("sd.download");
 
     const icon = document.createElement("div");
     icon.className = "eicon"; icon.textContent = iconFor(entry);
     const name = document.createElement("div");
     name.className = "ename"; name.textContent = entry.name;
     const size = document.createElement("div");
-    size.className = "esize"; size.textContent = entry.is_dir ? "Dossier" : fmtSize(entry.size);
+    size.className = "esize"; size.textContent = entry.is_dir ? t("sd.folder") : fmtSize(entry.size);
     const tag = document.createElement("div");
     tag.className = "etag";
     tag.textContent = entry.is_dir ? "DIR" : (entry.name.split(".").pop() || "FILE").toUpperCase();
@@ -358,7 +370,7 @@ function renderGrid(sorted) {
         openCtxMenu(e.clientX, e.clientY, entry, full);
       });
       const dl = document.createElement("button");
-      dl.className = "dlbtn"; dl.textContent = "⬇"; dl.title = "Télécharger";
+      dl.className = "dlbtn"; dl.textContent = "⬇"; dl.title = t("sd.downloadBtn");
       dl.addEventListener("click", (e) => { e.stopPropagation(); doDownloadSd(full); });
       card.appendChild(dl);
     }
@@ -373,7 +385,7 @@ function renderList(sorted) {
   table.className = "explorer-list";
   const thead = document.createElement("thead");
   thead.innerHTML =
-    '<tr><th></th><th>Nom</th><th>Type</th><th>Taille</th><th></th></tr>';
+    `<tr><th></th><th>${t("sd.colName")}</th><th>${t("sd.colType")}</th><th>${t("sd.colSize")}</th><th></th></tr>`;
   table.appendChild(thead);
   const tbody = document.createElement("tbody");
   for (const entry of sorted) {
@@ -389,8 +401,8 @@ function renderList(sorted) {
 
     const tdType = document.createElement("td");
     tdType.className = "ltype";
-    tdType.textContent = entry.is_dir ? "Dossier"
-      : (entry.name.split(".").pop() || "fichier").toUpperCase();
+    tdType.textContent = entry.is_dir ? t("sd.folder")
+      : (entry.name.split(".").pop() || t("sd.file")).toUpperCase();
 
     const tdSize = document.createElement("td");
     tdSize.className = "lsize";
@@ -400,7 +412,7 @@ function renderList(sorted) {
     tdAct.className = "lact";
     if (!entry.is_dir) {
       const dl = document.createElement("button");
-      dl.className = "dlbtn"; dl.textContent = "⬇"; dl.title = "Télécharger";
+      dl.className = "dlbtn"; dl.textContent = "⬇"; dl.title = t("sd.downloadBtn");
       dl.addEventListener("click", (e) => { e.stopPropagation(); doDownloadSd(full); });
       tdAct.appendChild(dl);
     }
@@ -525,17 +537,17 @@ async function renderGamesBrowser() {
   bar.className = "games-topbar";
   const rootLabel = document.createElement("span");
   rootLabel.className = "games-root-label";
-  rootLabel.textContent = "📁 " + gamesRoot;
+  rootLabel.textContent = t("games.rootLabel", { root: gamesRoot });
   const actions = document.createElement("div");
   actions.className = "games-actions";
   const refresh = document.createElement("button");
-  refresh.className = "btn ghost"; refresh.title = "Actualiser"; refresh.textContent = "⟳";
+  refresh.className = "btn ghost"; refresh.title = t("games.refreshTitle"); refresh.textContent = "⟳";
   refresh.addEventListener("click", () => renderGamesTab());
   const gear = document.createElement("button");
-  gear.className = "btn ghost"; gear.textContent = "⚙ Changer le dossier de jeux";
+  gear.className = "btn ghost"; gear.textContent = t("games.changeFolder");
   gear.addEventListener("click", async () => {
     const v = await askPrompt(
-      "Dossier de base des jeux sur la carte SD (une sous-catégorie par sous-dossier) :",
+      t("games.changeFolderPrompt"),
       gamesRoot);
     if (!v) return;
     gamesRoot = normalizeGamesPath(v);
@@ -565,14 +577,12 @@ function gamesError(message) {
 async function buildCategoryList() {
   const entries = await safeInvoke("list_sd", { path: gamesRoot });
   if (!entries) {
-    return gamesError(`Impossible de lister ${gamesRoot}. Vérifiez le dossier ou la connexion.`);
+    return gamesError(t("games.listError", { path: gamesRoot }));
   }
   const dirs = entries.filter((e) => e.is_dir)
     .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
   if (!dirs.length) {
-    return gamesError(
-      `Aucune catégorie dans ${gamesRoot} — créez un sous-dossier par type de jeu ` +
-      `(ex. Action, RPG, Plateforme…) et déposez vos ROM dedans.`);
+    return gamesError(t("games.noCategoriesError", { path: gamesRoot }));
   }
 
   const list = document.createElement("div");
@@ -615,7 +625,7 @@ async function buildMosaic() {
   const header = document.createElement("div");
   header.className = "mosaic-header";
   const back = document.createElement("button");
-  back.className = "btn ghost"; back.textContent = "← Catégories";
+  back.className = "btn ghost"; back.textContent = t("games.backToCategories");
   back.addEventListener("click", () => { gamesLevel = "categories"; renderGamesTab(); });
   const title = document.createElement("h3");
   title.className = "mosaic-title";
@@ -631,17 +641,17 @@ async function buildMosaic() {
   wrap.appendChild(status);
 
   if (!entries) {
-    status.textContent = `Impossible de lister ${catPath}.`;
+    status.textContent = t("games.mosaicListError", { path: catPath });
     return wrap;
   }
   const games = entries.filter(isRomFile)
     .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
   status.textContent = games.length <= 1
-    ? `${games.length} jeu disponible`
-    : `${games.length} jeux disponibles`;
+    ? t("games.oneGameAvailable", { count: games.length })
+    : t("games.gamesAvailable", { count: games.length });
 
   if (!games.length) {
-    wrap.appendChild(gamesError(`Aucune ROM connue (.pce/.sgx/.rom/.bin) dans ${catPath}.`));
+    wrap.appendChild(gamesError(t("games.noRomsError", { path: catPath })));
     return wrap;
   }
 
@@ -668,13 +678,12 @@ async function buildMosaic() {
     // région GoodTools/TOSEC -> No-Intro) ne trouve rien.
     const mapBtn = document.createElement("button");
     mapBtn.className = "mosaic-mapbtn"; mapBtn.textContent = "⚙";
-    mapBtn.title = "Associer ce jeu à un titre de la base de pochettes";
+    mapBtn.title = t("games.mapButtonTitle");
     mapBtn.addEventListener("click", async (e) => {
       e.stopPropagation();
       const current = getNameMap()[entry.name] || entry.name.replace(/\.[^.]+$/, "");
       const v = await askPrompt(
-        `Titre à chercher dans Libretro Thumbnails pour « ${entry.name} » ` +
-        `(sans extension, tel qu'il apparaît dans la base — laisser vide pour retirer l'association) :`,
+        t("games.mapPrompt", { name: entry.name }),
         current);
       if (v === null) return;
       saveNameMapEntry(entry.name, v.trim());
@@ -729,7 +738,7 @@ async function loadBoxartInto(romName, frame, seq) {
   frame.replaceChildren(img);
   if (cached.score < 1) {
     const pct = Math.round(cached.score * 100);
-    img.title = `Pochette approchée (${pct}%) : ${cached.matchedTitle}`;
+    img.title = t("games.approxBoxartTitle", { pct, title: cached.matchedTitle });
     const badge = document.createElement("div");
     badge.className = "mosaic-scorebadge" + (cached.score < 0.9 ? " low" : "");
     badge.textContent = pct + "%";
@@ -801,12 +810,12 @@ function showMatchInfo(cached) {
   els.gameMatchInfo.hidden = false;
   els.gameMatchInfo.innerHTML = "";
   const text = document.createElement("span");
-  text.textContent = `⚠ Pochette approchée (${Math.round(cached.score * 100)}%) : « ${cached.matchedTitle} ».`;
+  text.textContent = t("games.matchInfo", { pct: Math.round(cached.score * 100), title: cached.matchedTitle });
   const confirmBtn = document.createElement("button");
   confirmBtn.type = "button";
   confirmBtn.className = "match-confirm-btn";
-  confirmBtn.textContent = "✓ C'est le bon jeu";
-  confirmBtn.title = "Mémoriser ce titre comme correspondance confirmée pour ce fichier";
+  confirmBtn.textContent = t("games.matchConfirmBtn");
+  confirmBtn.title = t("games.matchConfirmTitle");
   confirmBtn.addEventListener("click", () => confirmMatch(cached));
   els.gameMatchInfo.appendChild(text);
   els.gameMatchInfo.appendChild(confirmBtn);
@@ -870,10 +879,9 @@ async function confirmMatch(cached) {
       els.gameBoxartPh.hidden = true;
       showMatchInfo(fresh); // se cache tout seul si score >= 1
     }
-    log(`✔ « ${entry.name} » associé à « ${fresh.matchedTitle} » ` +
-        `(${Math.round(fresh.score * 100)}%, mémorisé)`, "ok");
+    log(t("games.matchConfirmedLog", { name: entry.name, title: fresh.matchedTitle, pct: Math.round(fresh.score * 100) }), "ok");
   } else {
-    log(`⚠ Association enregistrée pour « ${entry.name} », mais la relecture a échoué.`, "err");
+    log(t("games.matchConfirmFailedLog", { name: entry.name }), "err");
   }
 
   // Rafraîchit la mosaïque derrière la fiche (élément séparé, reste ouverte
@@ -886,7 +894,7 @@ function openGameModal(entry, full) {
   confirmedEntryName = null;
   els.gameTitle.textContent = entry.name;
   els.gameMeta.innerHTML =
-    `<b>Taille</b> ${fmtSize(entry.size)}<br><b>Chemin</b> ${full}`;
+    `<b>${t("games.sizeLabel")}</b> ${fmtSize(entry.size)}<br><b>${t("games.pathLabel")}</b> ${full}`;
   els.gameBoxart.hidden = true;
   els.gameBoxartPh.hidden = false;
   els.gameBoxartPh.textContent = "🎮";
@@ -919,10 +927,10 @@ function openGameModal(entry, full) {
     }
     const frames = [];
     if (media.title_base64) {
-      frames.push({ uri: "data:image/png;base64," + media.title_base64, label: "Écran-titre" });
+      frames.push({ uri: "data:image/png;base64," + media.title_base64, label: t("games.titleScreenLabel") });
     }
     if (media.snap_base64) {
-      frames.push({ uri: "data:image/png;base64," + media.snap_base64, label: "Capture en jeu" });
+      frames.push({ uri: "data:image/png;base64," + media.snap_base64, label: t("games.inGameSnapLabel") });
     }
     startSnapSlideshow(frames);
   });
@@ -961,6 +969,10 @@ async function renderGamesTab() {
   els.gamesExplorer.innerHTML = "";
   els.gamesExplorer.appendChild(await renderGamesBrowser());
 }
+onLangChange(() => {
+  if ($("tab-games").classList.contains("active")) renderGamesTab();
+  if (gameModalTarget && !els.gameModal.hidden) openGameModal(gameModalTarget.entry, gameModalTarget.full);
+});
 
 // ---- dépôt de fichiers OS -> explorateur (upload) ----
 ["dragenter", "dragover"].forEach((evt) =>
@@ -989,7 +1001,7 @@ event.listen("transfer-progress", (evt) => {
   if (transferHideTimer) { clearTimeout(transferHideTimer); transferHideTimer = null; }
   bar.hidden = false;
   bar.classList.remove("done", "err");
-  const verb = p.dir === "download" ? "Téléchargement" : "Envoi";
+  const verb = p.dir === "download" ? t("sd.transferDownload") : t("sd.transferUpload");
   const fill = els.transferFill;
 
   if (p.phase === "start") {
@@ -1008,12 +1020,12 @@ event.listen("transfer-progress", (evt) => {
   } else if (p.phase === "done") {
     fill.classList.remove("indeterminate");
     fill.style.width = "100%";
-    els.transferPct.textContent = "Terminé";
+    els.transferPct.textContent = t("sd.transferDone");
     bar.classList.add("done");
     transferHideTimer = setTimeout(() => { bar.hidden = true; }, 2500);
   } else if (p.phase === "error") {
     fill.classList.remove("indeterminate");
-    els.transferPct.textContent = "Échec";
+    els.transferPct.textContent = t("sd.transferFailed");
     bar.classList.add("err");
     // L'erreur détaillée est déjà journalisée par safeInvoke (retour de commande).
     transferHideTimer = setTimeout(() => { bar.hidden = true; }, 5000);
@@ -1024,7 +1036,7 @@ async function doDownloadSd(full) {
   const local = await safeInvoke("pick_save", { default_name: full.split("/").pop() || "fichier.bin" });
   if (!local) return;
   const res = await safeInvoke("download", { src: full, local });
-  if (res && !res.isErr) log(`✔ Téléchargé : ${full}`, "ok");
+  if (res && !res.isErr) log(t("sd.downloadedLog", { path: full }), "ok");
 }
 
 // ---- menu contextuel de l'explorateur (clic droit sur un fichier) ----
@@ -1055,7 +1067,7 @@ document.addEventListener("click", closeCtxMenu);
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeCtxMenu(); });
 
 async function playSd(entry, full) {
-  log(`Lancement de ${entry.name}…`);
+  log(t("sd.launching", { name: entry.name }));
   // `full` est déjà préfixé "sd:" quand cette fonction est appelée depuis
   // l'onglet GAMES (chemins construits à partir de gamesRoot, ex.
   // "sd:/GAMES/Action/Jeu.pce"), mais pas depuis le menu contextuel de
@@ -1063,7 +1075,7 @@ async function playSd(entry, full) {
   // ne préfixer que si besoin, sous peine d'un "sd:/sd:/..." invalide.
   const rom = /^sd:/i.test(full) ? full : "sd:/" + full;
   const res = await safeInvoke("run_rom", { rom });
-  if (res && !res.isErr) log("Jeu lancé ✔", "ok");
+  if (res && !res.isErr) log(t("sd.launched"), "ok");
 }
 
 els.sdCtxMenu.addEventListener("click", async (e) => {
@@ -1078,19 +1090,19 @@ els.sdCtxMenu.addEventListener("click", async (e) => {
   } else if (action === "download") {
     doDownloadSd(full);
   } else if (action === "delete") {
-    const ok = await askConfirm(`Effacer « ${entry.name} » de la carte SD ?\nCette action est irréversible.`);
+    const ok = await askConfirm(t("sd.deleteConfirm", { name: entry.name }));
     if (!ok) return;
     const res = await safeInvoke("delete_sd", { path: full });
     if (res !== null) {
-      log(`✔ ${entry.name} effacé`, "ok");
+      log(t("sd.deletedLog", { name: entry.name }), "ok");
       renderExplorer();
     }
   } else if (action === "rename") {
-    const newName = await askPrompt("Nouveau nom :", entry.name);
+    const newName = await askPrompt(t("sd.renamePrompt"), entry.name);
     if (!newName || newName === entry.name) return;
     const res = await safeInvoke("rename_sd", { path: full, new_name: newName });
     if (res !== null) {
-      log(`✔ Renommé en ${newName}`, "ok");
+      log(t("sd.renamedLog", { name: newName }), "ok");
       renderExplorer();
     }
   }
@@ -1099,9 +1111,9 @@ els.sdCtxMenu.addEventListener("click", async (e) => {
 async function uploadOne(local) {
   const name = local.split(/[\\/]/).pop();
   const dest = joinSdPath(explorerPath, name);
-  log(`Téléversement de ${name} → ${explorerPath || "racine"}…`);
+  log(t("sd.uploadingLog", { name, dest: explorerPath || t("sd.root") }));
   const res = await safeInvoke("upload", { local, dest });
-  if (res && !res.isErr) log(`✔ ${name} envoyé`, "ok");
+  if (res && !res.isErr) log(t("sd.uploadedLog", { name }), "ok");
 }
 
 // Rafraîchit le dossier courant une seule fois après le lot complet (plutôt
@@ -1109,7 +1121,7 @@ async function uploadOne(local) {
 // dépôt multiple.
 async function uploadAll(files) {
   if (!files.length) return;
-  log(`Envoi de ${files.length} fichier(s) vers ${explorerPath || "racine"}…`, "info");
+  log(t("sd.uploadingMultiLog", { count: files.length, dest: explorerPath || t("sd.root") }), "info");
   for (const f of files) await uploadOne(f);
   await renderExplorer();
 }
@@ -1137,16 +1149,16 @@ $("pick-rom").addEventListener("click", async () => {
   const picked = await safeInvoke("pick_file");
   if (!picked) return;
   els.romPath.value = picked;
-  log(`Lancement de ${picked.split(/[\\/]/).pop()}…`);
+  log(t("play.launching", { name: picked.split(/[\\/]/).pop() }));
   const res = await safeInvoke("run_rom", { rom: picked });
   if (res && !res.isErr) {
-    log("Jeu lancé ✔", "ok");
+    log(t("play.launched"), "ok");
     // La RAM contient désormais le jeu. Relecture auto seulement sur l'émulateur.
     if (isEmulator && invalidateMemCache) invalidateMemCache();
   }
 });
 $("reset-btn").addEventListener("click", async () => {
-  await safeInvoke("reset_console", {}, "Console réinitialisée");
+  await safeInvoke("reset_console", {}, t("play.consoleReset"));
   if (isEmulator && invalidateMemCache) invalidateMemCache(); // émulateur uniquement
 });
 
@@ -1181,9 +1193,9 @@ async function refreshScreen(refresh = false) {
   els.screenCard.hidden = false;
 }
 $("screen-btn").addEventListener("click", async () => {
-  log("Capture de l'écran…");
+  log(t("play.capturing"));
   await refreshScreen(true);
-  if (lastScreenB64) log("Capture effectuée", "ok");
+  if (lastScreenB64) log(t("play.captured"), "ok");
 });
 // Bouger un réglage re-rend l'image localement (sans relire la carte).
 [els.batW, els.batH, els.resW, els.resH, els.scrollX, els.scrollY]
@@ -1197,7 +1209,7 @@ $("save-screen").addEventListener("click", async () => {
   if (!path) return;
   const ok = await safeInvoke("save_png", { data_base64: lastScreenB64, path });
   if (ok === null) return;
-  log(`PNG enregistré : ${path}`, "ok");
+  log(t("play.pngSaved", { path }), "ok");
 });
 
 // ---------------------------------------------------------------- mémoire (hex viewer)
@@ -1214,7 +1226,7 @@ $("save-screen").addEventListener("click", async () => {
   //    en mémoire, offsets relatifs à 0.
   const VIEWS = {
     ram: {
-      label: "Mémoire (vue actuelle)",
+      labelKey: "mem.ramLabel",
       start: 0x000000,
       size:  0x800000,          // 8 Mo (SIZE_RAM0)
       word16: false,
@@ -1224,7 +1236,7 @@ $("save-screen").addEventListener("click", async () => {
       showVectors: true,
     },
     vram: {
-      label: "VRAM (VDC)",
+      labelKey: "mem.vramLabel",
       start: 0,
       size:  0x10000,           // 64 Ko = 32 768 mots de 16 bits
       word16: true,
@@ -1234,7 +1246,7 @@ $("save-screen").addEventListener("click", async () => {
       snap: true,
     },
     cram: {
-      label: "CRAM (VCE)",
+      labelKey: "mem.cramLabel",
       start: 0,
       size:  0x400,             // 512 mots de 16 bits = 1 024 octets
       word16: true,
@@ -1245,6 +1257,7 @@ $("save-screen").addEventListener("click", async () => {
       snap: true,
     },
   };
+  const curLabel = () => t(cur.labelKey);
 
   // Instantanés VRAM / CRAM (Uint8Array) obtenus par `*v`. null = pas encore lu.
   let vramSnap = null, cramSnap = null;
@@ -1301,25 +1314,11 @@ $("save-screen").addEventListener("click", async () => {
 
   function makeHint() {
     if (cur === VIEWS.ram) {
-      const load = autoLoad
-        ? 'Les données se chargent au fil du défilement'
-        : 'Cliquez <span class="mono">🔄 Rafraîchir</span> pour charger la zone affichée (chaque lecture gèle brièvement la console)';
-      return 'RAM HuCard : <span class="mono">$000000</span> → <span class="mono">$7FFFFF</span> (8 Mo). ' +
-        load + ' ; un repère <span class="mono">bank</span> apparaît toutes les 8 Ko (0x2000 octets).';
+      const load = autoLoad ? t("mem.loadOnScroll") : t("mem.clickRefresh");
+      return t("mem.hintRam", { load });
     }
-    if (cur === VIEWS.vram) {
-      return 'VRAM (VDC) : mémoire vidéo de 64 Ko, mots de 16 bits (32 768 mots). ' +
-        'Instantané pris via la commande <span class="mono">*v</span> du menu OS ' +
-        '(comme la capture d\'écran) — nécessite <b>le menu de la carte affiché</b>. ' +
-        '« 🔄 Rafraîchir » reprend un instantané.';
-    }
-    if (cur === VIEWS.cram) {
-      return 'CRAM (VCE) : palette couleur, 32 palettes de 16 couleurs (512 mots de 16 bits). ' +
-        'Les <b>Palette 0–15</b> servent aux tuiles, les <b>Palette sprite 0–15</b> aux sprites. ' +
-        'Chaque mot code une couleur : <span class="mono">bits 8-6 = G</span>, ' +
-        '<span class="mono">5-3 = R</span>, <span class="mono">2-0 = B</span>. ' +
-        'Instantané via <span class="mono">*v</span> (menu de la carte affiché).';
-    }
+    if (cur === VIEWS.vram) return t("mem.hintVram");
+    if (cur === VIEWS.cram) return t("mem.hintCram");
   }
 
   // ----- géométrie -----
@@ -1340,9 +1339,9 @@ $("save-screen").addEventListener("click", async () => {
   // "Sprite N" pour la CRAM (16 palettes de tuiles puis 16 palettes sprites).
   function groupLabel(g) {
     if (cur === VIEWS.cram) {
-      return g < 16 ? "Palette " + g : "Sprite " + (g - 16);
+      return g < 16 ? t("mem.paletteN", { n: g }) : t("mem.spriteN", { n: g - 16 });
     }
-    return "bank " + g;
+    return t("mem.bankN", { n: g });
   }
 
   function setupGeometry(viewId) {
@@ -1376,9 +1375,9 @@ $("save-screen").addEventListener("click", async () => {
     if (bankCtrl) bankCtrl.style.display = cur.showBanks ? "" : "none";
     if (hexWrap) hexWrap.classList.toggle("noascii", NOASCII);
     if (hexHead) hexHead.scrollLeft = 0;
-    if (hOff) hOff.textContent = "Offset";
+    if (hOff) hOff.textContent = t("mem.offset");
     if (hHex) hHex.textContent = makeHexHeader();
-    if (hAsc) hAsc.textContent = SWATCHES ? "Couleurs" : (WORD16 ? "ASCII (bas/haut)" : "ASCII");
+    if (hAsc) hAsc.textContent = SWATCHES ? t("mem.colorsHeader") : (WORD16 ? t("mem.asciiHiLo") : t("mem.ascii"));
     if (hintEl) hintEl.innerHTML = makeHint();
   }
   // ----- cache / chargement paresseux -----
@@ -1527,11 +1526,11 @@ $("save-screen").addEventListener("click", async () => {
   // 16 Ko, … (les 10 derniers octets de la HuCard). Valeur petit-boutiste.
   const VEC_BASE = 0x1FF6;
   const VECTORS = [
-    { off: 0, cpu: "$FFF6 – $FFF7", name: "IRQ2",  desc: "Interruption externe IRQ2 ou instruction BRK" },
-    { off: 2, cpu: "$FFF8 – $FFF9", name: "IRQ1",  desc: "Interruption du VDC / balayage vertical" },
-    { off: 4, cpu: "$FFFA – $FFFB", name: "TIMER", desc: "Interruption du timer interne" },
-    { off: 6, cpu: "$FFFC – $FFFD", name: "NMI",   desc: "Non-Maskable Interrupt / interruption non masquable" },
-    { off: 8, cpu: "$FFFE – $FFFF", name: "RESET", desc: "Vecteur de démarrage du système" },
+    { off: 0, cpu: "$FFF6 – $FFF7", nameKey: "mem.vecIrq2Name",  descKey: "mem.vecIrq2Desc" },
+    { off: 2, cpu: "$FFF8 – $FFF9", nameKey: "mem.vecIrq1Name",  descKey: "mem.vecIrq1Desc" },
+    { off: 4, cpu: "$FFFA – $FFFB", nameKey: "mem.vecTimerName", descKey: "mem.vecTimerDesc" },
+    { off: 6, cpu: "$FFFC – $FFFD", nameKey: "mem.vecNmiName",   descKey: "mem.vecNmiDesc" },
+    { off: 8, cpu: "$FFFE – $FFFF", nameKey: "mem.vecResetName", descKey: "mem.vecResetDesc" },
   ];
   const vecListEl = $("vec-list");
   const vecValEls = [];
@@ -1542,9 +1541,9 @@ $("save-screen").addEventListener("click", async () => {
     vecValEls.length = 0;
     for (const v of VECTORS) {
       const li = document.createElement("li");
-      li.title = v.desc;
+      li.title = t(v.descKey);
       const a = document.createElement("span"); a.className = "vec-addr"; a.textContent = v.cpu;
-      const n = document.createElement("b");   n.className = "vec-name"; n.textContent = v.name;
+      const n = document.createElement("b");   n.className = "vec-name"; n.textContent = t(v.nameKey);
       const val = document.createElement("span"); val.className = "vec-val empty"; val.textContent = "…";
       vecValEls.push(val);
       li.append(a, n, val);
@@ -1590,7 +1589,7 @@ $("save-screen").addEventListener("click", async () => {
   $("mem-go-btn").addEventListener("click", () => {
     const raw = goInput.value.trim().replace(/^0x/i, "").replace(/^\$/, "");
     let addr = parseInt(raw, 16);
-    if (isNaN(addr)) { log("Adresse invalide", "err"); return; }
+    if (isNaN(addr)) { log(t("mem.invalidAddress"), "err"); return; }
     scrollToAddr(addr);
   });
   goInput.addEventListener("keydown", (e) => { if (e.key === "Enter") $("mem-go-btn").click(); });
@@ -1636,7 +1635,7 @@ $("save-screen").addEventListener("click", async () => {
 
   async function runSearch() {
     const pat = parseSearchPattern(searchInput.value);
-    if (!pat || !pat.length) { log("Recherche vide", "err"); return; }
+    if (!pat || !pat.length) { log(t("mem.emptySearch"), "err"); return; }
     searchAbort = false;
     searchStop.hidden = false;
     if (highlight) { highlight = null; renderVisible(); }
@@ -1647,7 +1646,7 @@ $("save-screen").addEventListener("click", async () => {
     // milliers de CMD_MEM_RD d'affilée → console gelée > 1 min. On limite la
     // recherche aux blocs déjà chargés (zones consultées).
     const scanAll = readMode === "emu";
-    log("Recherche de " + label + (scanAll ? "…" : " (zones déjà affichées)…"), "info");
+    log(t("mem.searching", { label, scope: scanAll ? t("mem.searchScopeAll") : t("mem.searchScopeLoaded") }), "info");
     try {
       for (let k = 0; k < CHUNK_CNT && !searchAbort; k++) {
         const c = (startChunk + k) % CHUNK_CNT;
@@ -1664,12 +1663,12 @@ $("save-screen").addEventListener("click", async () => {
         if (at >= 0) {
           const addr = chunkAddr(c) + at;
           highlight = { addr, bytes: pat };
-          log("Motif trouvé à " + hexAddr(addr) + (GROUPED ? " (" + groupLabel(c) + ")" : ""), "ok");
+          log(t("mem.patternFound", { addr: hexAddr(addr), group: GROUPED ? " (" + groupLabel(c) + ")" : "" }), "ok");
           scrollToAddr(addr);
           return;
         }
       }
-      log(scanAll ? "Motif introuvable" : "Motif introuvable dans les zones déjà chargées (faites défiler puis relancez)", "err");
+      log(scanAll ? t("mem.patternNotFound") : t("mem.patternNotFoundLoaded"), "err");
     } finally {
       searchStop.hidden = true;
     }
@@ -1689,16 +1688,16 @@ $("save-screen").addEventListener("click", async () => {
   async function captureVramCram(refresh = true) {
     if (vramCapturing) return false;
     vramCapturing = true;
-    if (refresh) log("Capture VRAM/CRAM (menu de la carte)…");
+    if (refresh) log(t("mem.capturingVramCram"));
     const res = await safeInvoke("capture_vram", { refresh });
     vramCapturing = false;
     if (!res) {
-      log("VRAM/CRAM : lecture impossible. Affichez le menu de la carte (pas pendant un jeu).", "err");
+      log(t("mem.vramCramUnavailable"), "err");
       return false;
     }
     vramSnap = b64ToBytes(res.vram_b64);
     cramSnap = b64ToBytes(res.cram_b64);
-    log("VRAM/CRAM capturées ✔", "ok");
+    log(t("mem.vramCramCaptured"), "ok");
     return true;
   }
 
@@ -1783,7 +1782,7 @@ $("save-screen").addEventListener("click", async () => {
   // Rafraîchit la vue courante : vide le cache (et les relectures en cours),
   // relit les données fraîches de l'émulateur, et recharge les vecteurs si besoin.
   $("mem-refresh").addEventListener("click", () => {
-    log("Relecture de " + cur.label + "…");
+    log(t("mem.reloading", { label: curLabel() }));
     invalidateMemCache();
   });
 
@@ -1813,7 +1812,7 @@ $("save-screen").addEventListener("click", async () => {
       if (!p) return;
       const okv = await safeInvoke("save_png", { data_base64: bytesToB64(snap), path: p });
       if (okv === null) return;
-      log(cur.label + " enregistrée : " + p + " (" + snap.length + " octets)", "ok");
+      log(t("mem.savedLog", { label: curLabel(), path: p, size: snap.length }), "ok");
       return;
     }
 
@@ -1823,9 +1822,7 @@ $("save-screen").addEventListener("click", async () => {
     if (readMode !== "emu") {
       const secs = Math.ceil(SIZE / 90000); // ~90 Ko/s utiles
       const ok = await askConfirm(
-        `Enregistrer ${cur.label} (${fmtSize(SIZE)}) demande de lire toute la zone ` +
-        `sur la carte : la console va saccader pendant ~${secs} s et le jeu en ` +
-        `cours peut planter. Continuer ?`);
+        t("mem.confirmFullDump", { label: curLabel(), size: fmtSize(SIZE), secs }));
       if (!ok) return;
     }
 
@@ -1834,19 +1831,26 @@ $("save-screen").addEventListener("click", async () => {
 
     const BLOCK = readMode === "emu" ? 0x40000 : 0x4000;
     const out = new Uint8Array(SIZE);
-    log("Lecture de " + cur.label + " (" + fmtSize(SIZE) + ")…");
+    log(t("mem.readingLabel", { label: curLabel(), size: fmtSize(SIZE) }));
     let lastPct = -1;
     for (let off = 0; off < SIZE; off += BLOCK) {
       const len = Math.min(BLOCK, SIZE - off);
       const dump = await safeInvoke("memrd", { addr: START + off, len });
-      if (!dump) { log("Lecture interrompue à " + hexAddr(START + off), "err"); return; }
+      if (!dump) { log(t("mem.readInterrupted", { addr: hexAddr(START + off) }), "err"); return; }
       out.set(Uint8Array.from(atob(dump.data_base64), (c) => c.charCodeAt(0)), off);
       const pct = Math.floor((off + len) * 100 / SIZE);
       if (SIZE > BLOCK && pct !== lastPct && pct % 10 === 0) { log(`  ${pct} %`, ""); lastPct = pct; }
     }
     const ok = await safeInvoke("save_png", { data_base64: bytesToB64(out), path });
     if (ok === null) return;
-    log(cur.label + " enregistrée : " + path + " (" + out.length + " octets)", "ok");
+    log(t("mem.savedLog", { label: curLabel(), path, size: out.length }), "ok");
+  });
+
+  onLangChange(() => {
+    setupGeometry(viewIdOf(cur));
+    buildVecList();
+    if (cur.showVectors && els.connDot.classList.contains("on")) loadVectors();
+    renderVisible(false);
   });
 })();
 
@@ -1895,13 +1899,18 @@ $("save-screen").addEventListener("click", async () => {
   };
 
   // Palettes : 16 « fond » puis 16 « sprite » (disposition CRAM du VCE).
-  for (let p = 0; p < 32; p++) {
-    const o = document.createElement("option");
-    o.value = p;
-    o.textContent = p < 16 ? `Fond ${p}` : `Sprite ${p - 16}`;
-    elPal.appendChild(o);
+  function buildPaletteOptions() {
+    const prev = elPal.value;
+    elPal.innerHTML = "";
+    for (let p = 0; p < 32; p++) {
+      const o = document.createElement("option");
+      o.value = p;
+      o.textContent = p < 16 ? t("sprites.paletteBg", { n: p }) : t("sprites.paletteSprite", { n: p - 16 });
+      elPal.appendChild(o);
+    }
+    elPal.value = prev || "16"; // Sprite 0 par défaut
   }
-  elPal.value = "16"; // Sprite 0 par défaut
+  buildPaletteOptions();
 
   const word = (buf, w) => buf[2 * w] | (buf[2 * w + 1] << 8);
 
@@ -2089,9 +2098,9 @@ $("save-screen").addEventListener("click", async () => {
   function updateStatus() {
     if (!geom) { elStatus.textContent = ""; return; }
     const label = geom.spec.bg ? "8×8" : `${geom.spec.w}×${geom.spec.h}`;
-    const lockNote = locked ? "🔒 Vue verrouillée sur la sélection — le reste de la VRAM est masqué. " : "";
+    const lockNote = locked ? t("sprites.lockedNote") : "";
     elStatus.textContent =
-      lockNote + `${geom.total} cellules ${label} · ${geom.cols}×${geom.rows} · VRAM 64 Ko`;
+      lockNote + t("sprites.statusLine", { cells: geom.total, label, cols: geom.cols, rows: geom.rows });
   }
 
   // Rectangle de sélection normalisé (coordonnées de cellule, incluses), ou
@@ -2138,7 +2147,7 @@ $("save-screen").addEventListener("click", async () => {
     const btn = $("spr-lock");
     if (!btn) return;
     btn.disabled = !selRect();
-    btn.textContent = locked ? "🔓 Déverrouiller" : "🔒 Locker";
+    btn.textContent = locked ? t("sprites.unlock") : t("sprites.lock");
     btn.classList.toggle("active", locked);
   }
 
@@ -2146,7 +2155,7 @@ $("save-screen").addEventListener("click", async () => {
 
   function updateSelInfo() {
     const r = selRect();
-    if (!r || !geom) { elInfo.textContent = "Aucune cellule sélectionnée."; return; }
+    if (!r || !geom) { elInfo.textContent = t("sprites.noSelection"); return; }
     const hex = (n) => "$" + n.toString(16).toUpperCase();
     const wCells = r.x1 - r.x0 + 1, hCells = r.y1 - r.y0 + 1;
 
@@ -2154,26 +2163,26 @@ $("save-screen").addEventListener("click", async () => {
       const idx = idxOf(r.x0, r.y0);
       if (geom.spec.bg) {
         const wordAddr = idx * 16, byteAddr = wordAddr * 2;
-        elInfo.textContent = `Cellule #${idx} · VRAM ${hex(wordAddr)} (mot) / ${hex(byteAddr)} (octet)`;
+        elInfo.textContent = t("sprites.cellInfo", { idx, word: hex(wordAddr), byte: hex(byteAddr) });
       } else {
         const baseWord = idx * geom.wordsPerCell;
         const patternBase = baseWord / 64; // n° de pattern SATB (unité 16×16)
         const nBlocks = geom.spec.cw * geom.spec.ch;
-        elInfo.textContent = `Sprite #${idx} · VRAM ${hex(baseWord)} (mot de base) · pattern SATB #${patternBase}`
-          + (nBlocks > 1 ? ` (+${nBlocks - 1} bloc(s) 16×16 contigus)` : "");
+        elInfo.textContent = t("sprites.spriteInfo", { idx, word: hex(baseWord), pattern: patternBase })
+          + (nBlocks > 1 ? t("sprites.spriteInfoExtraBlocks", { n: nBlocks - 1 }) : "");
       }
       return;
     }
 
     const nCells = wCells * hCells;
     const pxW = wCells * geom.cw, pxH = hCells * geom.ch;
-    let msg = `Sélection ${wCells}×${hCells} cellules (${nCells}) · ${pxW}×${pxH} px`;
+    let msg = t("sprites.selectionInfo", { w: wCells, h: hCells, n: nCells, pxw: pxW, pxh: pxH });
     if (hCells === 1) {
       const w0 = idxOf(r.x0, r.y0) * (geom.spec.bg ? 16 : geom.wordsPerCell);
       const w1 = (idxOf(r.x1, r.y0) + 1) * (geom.spec.bg ? 16 : geom.wordsPerCell) - 1;
-      msg += ` · VRAM ${hex(w0)}–${hex(w1)} (mots)`;
+      msg += t("sprites.selectionAddrRange", { from: hex(w0), to: hex(w1) });
     } else {
-      msg += ` · adresses non contiguës sur ${hCells} lignes`;
+      msg += t("sprites.selectionNonContiguous", { h: hCells });
     }
     elInfo.textContent = msg;
   }
@@ -2181,11 +2190,11 @@ $("save-screen").addEventListener("click", async () => {
   async function sprCapture(refresh) {
     if (capturing) return;
     capturing = true;
-    elStatus.textContent = refresh ? "Capture VRAM (menu de la carte)…" : "Chargement…";
+    elStatus.textContent = refresh ? t("sprites.capturingVram") : t("sprites.loadingStatus");
     const res = await safeInvoke("capture_vram", { refresh });
     capturing = false;
     if (!res) {
-      elStatus.textContent = "VRAM indisponible — affichez le menu de la carte (pas pendant un jeu).";
+      elStatus.textContent = t("sprites.vramUnavailable");
       return;
     }
     vram = b64ToBytesLocal(res.vram_b64);
@@ -2268,7 +2277,14 @@ $("save-screen").addEventListener("click", async () => {
     if (!path) return;
     const b64 = src.toDataURL("image/png").split(",")[1];
     const ok = await safeInvoke("save_png", { data_base64: b64, path });
-    if (ok !== null) log((r ? "Sélection VRAM enregistrée" : "Planche VRAM enregistrée") + " : " + path, "ok");
+    if (ok !== null) log(r ? t("sprites.selectionSaved", { path }) : t("sprites.sheetSaved", { path }), "ok");
+  });
+
+  onLangChange(() => {
+    buildPaletteOptions();
+    updateStatus();
+    updateSelInfo();
+    updateLockUI();
   });
 })();
 
@@ -2312,10 +2328,10 @@ $("save-screen").addEventListener("click", async () => {
   const b = await safeInvoke("get_build_info");
   if (b) {
     const el = $("app-version");
-    if (el) { el.textContent = b.label; el.title = `Application ${b.label}`; }
-    log(`Turbo Everdrive USB Tools GUI ${b.label}`, "info");
+    if (el) { el.textContent = b.label; el.title = t("log.appVersionTitle", { label: b.label }); }
+    log(t("log.appVersion", { label: b.label }), "info");
   }
 })();
 refreshPorts();
 setInterval(refreshPorts, 4000); // rafraîchit la liste des ports
-log("Prêt. Connectez la carte puis cliquez sur Connecter.", "info");
+log(t("log.ready"), "info");

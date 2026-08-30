@@ -49,6 +49,14 @@ body {
 .accent { color: var(--magenta); text-shadow: 0 0 12px var(--magenta); }
 .sub { color: var(--muted); font-size: 12px; display: block; margin-top: 2px; }
 
+.topbar-right { display: flex; align-items: center; gap: 14px; }
+.lang-select {
+  background: rgba(255,255,255,0.06); color: var(--text, #eee);
+  border: 1px solid var(--border); border-radius: 6px;
+  padding: 5px 8px; font-size: 12px; cursor: pointer;
+}
+.lang-select:hover { border-color: var(--cyan); }
+
 .conn-status { display: flex; align-items: center; gap: 9px; font-size: 13px; color: var(--muted); }
 .dot { width: 11px; height: 11px; border-radius: 50%; background: var(--red); box-shadow: 0 0 10px var(--red); }
 .dot.on { background: var(--green); box-shadow: 0 0 10px var(--green); }
