@@ -133,6 +133,7 @@ pub fn run() {
             memrd,
             save_png,
             pick_file,
+            pick_folder,
             pick_save,
             get_dropped,
             clear_dropped,
@@ -359,14 +360,33 @@ impl From<Option<thumbnails::ThumbMatch>> for BoxartResp {
     }
 }
 
-/// Jaquette d'un jeu de la carte SD via Libretro Thumbnails (voir
-/// `thumbnails.rs`) — champs `None` si aucune correspondance trouvée. Utilisé
-/// pour chaque vignette du carrousel : mise en cache disque après le premier
-/// essai (trouvé ou non), donc peu coûteux à ré-appeler.
-#[tauri::command]
-async fn fetch_boxart(app: tauri::AppHandle, name: String) -> Result<BoxartResp, String> {
+/// Construit la source de pochettes depuis les paramètres du frontend :
+/// `"local"` + un dossier -> mode local (`DB_Thumbnails`) ; tout le reste
+/// (par défaut `"network"`) -> dépôts Libretro Thumbnails en ligne.
+fn thumb_source(source: &str, local_dir: Option<String>) -> thumbnails::Source {
+    if source == "local" {
+        if let Some(dir) = local_dir.filter(|d| !d.trim().is_empty()) {
+            return thumbnails::Source::Local(std::path::PathBuf::from(dir));
+        }
+    }
+    thumbnails::Source::Network
+}
+
+/// Jaquette d'un jeu de la carte SD (voir `thumbnails.rs` — réseau Libretro
+/// Thumbnails ou dossier local `DB_Thumbnails` selon `source`) — champs
+/// `None` si aucune correspondance trouvée. Utilisé pour chaque vignette du
+/// carrousel : en mode réseau, mise en cache disque après le premier essai
+/// (trouvé ou non), donc peu coûteux à ré-appeler.
+#[tauri::command(rename_all = "snake_case")]
+async fn fetch_boxart(
+    app: tauri::AppHandle,
+    name: String,
+    source: String,
+    local_dir: Option<String>,
+) -> Result<BoxartResp, String> {
     let cache_dir = app.path().app_cache_dir().map_err(|e| e.to_string())?;
-    let m = thumbnails::fetch(&cache_dir, &base_name(&name), thumbnails::Kind::Boxart).await;
+    let src = thumb_source(&source, local_dir);
+    let m = thumbnails::fetch(&cache_dir, &src, &base_name(&name), thumbnails::Kind::Boxart).await;
     Ok(m.into())
 }
 
@@ -381,13 +401,19 @@ struct GameMedia {
     snap_base64: Option<String>,
 }
 
-#[tauri::command]
-async fn fetch_game_media(app: tauri::AppHandle, name: String) -> Result<GameMedia, String> {
+#[tauri::command(rename_all = "snake_case")]
+async fn fetch_game_media(
+    app: tauri::AppHandle,
+    name: String,
+    source: String,
+    local_dir: Option<String>,
+) -> Result<GameMedia, String> {
     let cache_dir = app.path().app_cache_dir().map_err(|e| e.to_string())?;
+    let src = thumb_source(&source, local_dir);
     let base = base_name(&name);
-    let boxart = thumbnails::fetch(&cache_dir, &base, thumbnails::Kind::Boxart).await;
-    let title_screen = thumbnails::fetch(&cache_dir, &base, thumbnails::Kind::Title).await;
-    let snap = thumbnails::fetch(&cache_dir, &base, thumbnails::Kind::Snap).await;
+    let boxart = thumbnails::fetch(&cache_dir, &src, &base, thumbnails::Kind::Boxart).await;
+    let title_screen = thumbnails::fetch(&cache_dir, &src, &base, thumbnails::Kind::Title).await;
+    let snap = thumbnails::fetch(&cache_dir, &src, &base, thumbnails::Kind::Snap).await;
     Ok(GameMedia {
         boxart: boxart.into(),
         title_base64: title_screen.map(|m| b64(&m.bytes)),
@@ -575,6 +601,14 @@ fn pick_file() -> Result<Option<String>, String> {
         .add_filter("ROM EverDrive", &["pce", "sgx", "bin", "rom", "fpg"])
         .add_filter("Tous fichiers", &["*"])
         .pick_file()
+        .map(|p| p.to_string_lossy().into_owned()))
+}
+
+/// Ouvre un sélecteur de dossier (ex. racine `DB_Thumbnails` en mode local).
+#[tauri::command]
+fn pick_folder() -> Result<Option<String>, String> {
+    Ok(rfd::FileDialog::new()
+        .pick_folder()
         .map(|p| p.to_string_lossy().into_owned()))
 }
 

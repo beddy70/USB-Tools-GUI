@@ -1,34 +1,48 @@
-//! Pochettes de jeu via la base [Libretro Thumbnails](https://github.com/libretro-thumbnails)
-//! (dépôts GitHub, un par système, mis à jour par la communauté RetroArch).
+//! Pochettes de jeu, en deux modes au choix (frontend, par utilisateur) :
 //!
-//! Chaque dépôt contient trois dossiers d'images PNG nommées d'après le titre
-//! du jeu en convention *No-Intro* :
+//! - **Réseau** : base communautaire [Libretro
+//!   Thumbnails](https://github.com/libretro-thumbnails) (dépôts GitHub, un
+//!   par système, mis à jour par la communauté RetroArch) ;
+//! - **Local** ([`Source::Local`]) : un dossier `DB_Thumbnails` sur le
+//!   disque de l'utilisateur, avec exactement la même arborescence que les
+//!   dépôts ci-dessus (pratique pour cloner/copier une fois le dépôt en
+//!   local et travailler hors ligne) : `DB_Thumbnails/<dépôt>/<dossier>/`.
+//!
+//! Dans les deux cas, l'arborescence attendue est celle des dépôts
+//! libretro-thumbnails : un sous-dossier par système
+//! (`NEC_-_PC_Engine_-_TurboGrafx_16` ou `NEC_-_PC_Engine_SuperGrafx`, selon
+//! l'extension de la ROM), lui-même contenant des dossiers d'images PNG
+//! nommées d'après le titre du jeu en convention *No-Intro* :
 //!   `Named_Boxarts/<Titre> (Région).png`  — jaquette
 //!   `Named_Snaps/<Titre> (Région).png`    — capture en jeu
 //!   `Named_Titles/<Titre> (Région).png`   — écran-titre
+//!   `Named_Logos/<Titre> (Région).png`    — logo (présent côté dépôt, non
+//!                                            utilisé par cette application)
 //!
 //! Les noms de ROM sur une vraie carte SD suivent souvent une autre
 //! convention (GoodTools/TOSEC : « Dragon's Curse (U).pce ») que No-Intro
 //! (« Dragon's Curse (USA).png ») : deux niveaux de recherche, du plus fiable
-//! au plus approximatif :
+//! au plus approximatif, communs aux deux modes :
 //!
 //! 1. [`name_variants`] essaie quelques substitutions usuelles des codes de
 //!    région (résultat noté confiance 1.0 — c'est une transformation connue,
 //!    pas une supposition) ;
 //! 2. si aucune variante ne correspond, repli sur une **recherche au plus
-//!    proche** dans l'index complet des titres du dépôt (téléchargé une seule
-//!    fois via l'API GitHub « git trees », mis en cache indéfiniment) : le
-//!    titre le plus proche par similarité de texte est retenu s'il dépasse
+//!    proche** dans l'index complet des titres disponibles (téléchargé une
+//!    seule fois via l'API GitHub « git trees » en mode réseau, mis en cache
+//!    indéfiniment ; simple listage du dossier en mode local) : le titre le
+//!    plus proche par similarité de texte est retenu s'il dépasse
 //!    [`FUZZY_THRESHOLD`], avec son score en pourcentage.
 //!
 //! Un jeu sans correspondance suffisamment proche reste simplement sans
 //! image — l'utilisateur peut alors forcer manuellement un titre via le
 //! mapping de noms (gear de la mosaïque, frontend).
 //!
-//! Requêtes réseau via `reqwest` (rustls — pas d'OpenSSL, pour rester
+//! Mode réseau : requêtes via `reqwest` (rustls — pas d'OpenSSL, pour rester
 //! cross-compilable vers Windows) ; tout résultat (trouvé ou non, variante ou
 //! approché) est mis en cache sur disque (`app_cache_dir()/thumbnails/`) pour
-//! ne plus jamais refaire cette requête ensuite.
+//! ne plus jamais refaire cette requête ensuite. Mode local : lecture directe
+//! du disque à chaque appel, pas de cache nécessaire (déjà local).
 
 use percent_encoding::{utf8_percent_encode, AsciiSet, NON_ALPHANUMERIC};
 use serde::Deserialize;
@@ -75,6 +89,16 @@ pub struct ThumbMatch {
     pub bytes: Vec<u8>,
     pub matched_title: String,
     pub score: f64,
+}
+
+/// D'où lire les pochettes — choix fait côté frontend (paramètre utilisateur,
+/// persisté en `localStorage`), transmis à chaque appel.
+pub enum Source {
+    /// Dépôts GitHub `libretro-thumbnails` (comportement historique).
+    Network,
+    /// Dossier local `DB_Thumbnails`, même arborescence que les dépôts
+    /// ci-dessus (voir le commentaire de module).
+    Local(PathBuf),
 }
 
 fn repo_for_ext(ext: &str) -> &'static str {
@@ -360,9 +384,22 @@ fn best_fuzzy_match(stem: &str, candidates: &[String]) -> Option<(String, f64)> 
         .max_by(|a, b| a.1.total_cmp(&b.1))
 }
 
-/// Cherche (variantes connues, puis recherche au plus proche, cache disque à
-/// chaque étape) l'image `kind` pour ce fichier ROM.
-pub async fn fetch(cache_dir: &Path, rom_file_name: &str, kind: Kind) -> Option<ThumbMatch> {
+/// Cherche l'image `kind` pour ce fichier ROM, depuis la source demandée.
+pub async fn fetch(
+    cache_dir: &Path,
+    source: &Source,
+    rom_file_name: &str,
+    kind: Kind,
+) -> Option<ThumbMatch> {
+    match source {
+        Source::Network => fetch_network(cache_dir, rom_file_name, kind).await,
+        Source::Local(root) => fetch_local(root, rom_file_name, kind),
+    }
+}
+
+/// Mode réseau : variantes connues, puis recherche au plus proche, cache
+/// disque à chaque étape (téléchargements + index + marqueurs d'échec).
+async fn fetch_network(cache_dir: &Path, rom_file_name: &str, kind: Kind) -> Option<ThumbMatch> {
     let miss = miss_marker(cache_dir, rom_file_name, kind);
     if miss.exists() {
         return None;
@@ -391,6 +428,54 @@ pub async fn fetch(cache_dir: &Path, rom_file_name: &str, kind: Kind) -> Option<
         let _ = std::fs::create_dir_all(parent);
     }
     let _ = std::fs::write(&miss, b"");
+    None
+}
+
+/// Chemin de l'image `<root>/<repo>/<folder>/<titre>.png` en mode local.
+fn local_exact_path(root: &Path, repo: &str, folder: &str, title: &str) -> PathBuf {
+    root.join(repo).join(folder).join(format!("{}.png", sanitize(title)))
+}
+
+/// Liste des titres présents dans `<root>/<repo>/<folder>` — simple lecture
+/// de dossier (pas de mise en cache : c'est déjà local, donc rapide, et le
+/// contenu peut changer d'une fois à l'autre si l'utilisateur met à jour son
+/// dossier `DB_Thumbnails`).
+fn local_index(root: &Path, repo: &str, folder: &str) -> Vec<String> {
+    let dir = root.join(repo).join(folder);
+    let Ok(entries) = std::fs::read_dir(&dir) else {
+        return Vec::new();
+    };
+    entries
+        .filter_map(|e| e.ok())
+        .filter(|e| e.path().extension().is_some_and(|ext| ext.eq_ignore_ascii_case("png")))
+        .filter_map(|e| e.path().file_stem().and_then(|s| s.to_str()).map(str::to_string))
+        .collect()
+}
+
+/// Mode local (dossier `DB_Thumbnails` de l'utilisateur) : même algorithme de
+/// correspondance que le mode réseau (variantes connues puis recherche au
+/// plus proche), mais lecture directe du disque — pas de requête HTTP, pas
+/// de cache (déjà local).
+fn fetch_local(root: &Path, rom_file_name: &str, kind: Kind) -> Option<ThumbMatch> {
+    let (stem, ext) = split_ext(rom_file_name);
+    let repo = repo_for_ext(&ext);
+    let folder = kind.folder();
+
+    for variant in name_variants(stem) {
+        let path = local_exact_path(root, repo, folder, &variant);
+        if let Ok(bytes) = std::fs::read(&path) {
+            return Some(ThumbMatch { bytes, matched_title: variant, score: 1.0 });
+        }
+    }
+
+    let index = local_index(root, repo, folder);
+    if let Some((matched_title, score)) = best_fuzzy_match(stem, &index) {
+        let path = local_exact_path(root, repo, folder, &matched_title);
+        if let Ok(bytes) = std::fs::read(&path) {
+            return Some(ThumbMatch { bytes, matched_title, score });
+        }
+    }
+
     None
 }
 
@@ -426,6 +511,62 @@ mod tests {
         assert!(best_fuzzy_match("Dragon's Curse (USA)", &candidates).is_none());
     }
 
+    // Mode local (dossier DB_Thumbnails) : pur système de fichiers, aucun
+    // réseau — exécuté par défaut (pas de #[ignore]).
+    #[test]
+    fn fetch_local_exact_variant() {
+        let dir = std::env::temp_dir().join("edlink-thumb-test-local-exact");
+        let _ = std::fs::remove_dir_all(&dir);
+        let folder = dir.join(REPO_TG16).join("Named_Boxarts");
+        std::fs::create_dir_all(&folder).unwrap();
+        std::fs::write(folder.join("Dragon's Curse (USA).png"), b"fake-png-bytes").unwrap();
+
+        let m = tauri::async_runtime::block_on(fetch(
+            &std::env::temp_dir(), // cache_dir : inutilisé en mode local
+            &Source::Local(dir),
+            "Dragon's Curse (U).pce",
+            Kind::Boxart,
+        ));
+        let m = m.expect("attendu : jaquette trouvée via variante (USA) en local");
+        assert_eq!(m.score, 1.0);
+        assert_eq!(m.matched_title, "Dragon's Curse (USA)");
+        assert_eq!(m.bytes, b"fake-png-bytes");
+    }
+
+    #[test]
+    fn fetch_local_fuzzy_fallback() {
+        let dir = std::env::temp_dir().join("edlink-thumb-test-local-fuzzy");
+        let _ = std::fs::remove_dir_all(&dir);
+        let folder = dir.join(REPO_TG16).join("Named_Snaps");
+        std::fs::create_dir_all(&folder).unwrap();
+        std::fs::write(folder.join("Bomberman '93 (Japan).png"), b"fake").unwrap();
+        std::fs::write(folder.join("Air Zonk (USA).png"), b"fake").unwrap();
+
+        let m = tauri::async_runtime::block_on(fetch(
+            &std::env::temp_dir(),
+            &Source::Local(dir),
+            "Bomberman 93 (Japan).pce",
+            Kind::Snap,
+        ));
+        let m = m.expect("attendu : correspondance approchée trouvée en local");
+        assert_eq!(m.matched_title, "Bomberman '93 (Japan)");
+        assert!(m.score < 1.0 && m.score >= FUZZY_THRESHOLD);
+    }
+
+    #[test]
+    fn fetch_local_missing_returns_none() {
+        let dir = std::env::temp_dir().join("edlink-thumb-test-local-missing");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join(REPO_TG16).join("Named_Titles")).unwrap();
+        let m = tauri::async_runtime::block_on(fetch(
+            &std::env::temp_dir(),
+            &Source::Local(dir),
+            "Totally Unknown Game (U).pce",
+            Kind::Title,
+        ));
+        assert!(m.is_none());
+    }
+
     // Réseau réel — désactivé par défaut (`cargo test -- --ignored` pour l'exécuter).
     // `tauri::async_runtime::block_on` évite d'ajouter `tokio` en dépendance
     // directe rien que pour ce test (déjà tiré par `tauri`/`reqwest`).
@@ -434,7 +575,7 @@ mod tests {
     fn fetch_known_game_boxart() {
         let dir = std::env::temp_dir().join("edlink-thumb-test");
         let _ = std::fs::remove_dir_all(&dir);
-        let m = tauri::async_runtime::block_on(fetch(&dir, "Dragon's Curse (U).pce", Kind::Boxart));
+        let m = tauri::async_runtime::block_on(fetch(&dir, &Source::Network, "Dragon's Curse (U).pce", Kind::Boxart));
         let m = m.expect("attendu : jaquette trouvée via variante (USA)");
         assert_eq!(m.score, 1.0);
     }
@@ -446,7 +587,7 @@ mod tests {
     fn fetch_fuzzy_fallback() {
         let dir = std::env::temp_dir().join("edlink-thumb-test-fuzzy");
         let _ = std::fs::remove_dir_all(&dir);
-        let m = tauri::async_runtime::block_on(fetch(&dir, "Bomberman 93 (Japan).pce", Kind::Boxart));
+        let m = tauri::async_runtime::block_on(fetch(&dir, &Source::Network, "Bomberman 93 (Japan).pce", Kind::Boxart));
         let m = m.expect("attendu : correspondance approchée trouvée");
         assert!(m.score < 1.0);
         assert!(m.score >= FUZZY_THRESHOLD);
@@ -462,7 +603,7 @@ mod tests {
     fn fetch_fuzzy_fallback_prefixed_title() {
         let dir = std::env::temp_dir().join("edlink-thumb-test-fuzzy-prefixed");
         let _ = std::fs::remove_dir_all(&dir);
-        let m = tauri::async_runtime::block_on(fetch(&dir, "Cyber Cross (J).pce", Kind::Boxart));
+        let m = tauri::async_runtime::block_on(fetch(&dir, &Source::Network, "Cyber Cross (J).pce", Kind::Boxart));
         let m = m.expect("attendu : correspondance approchée trouvée malgré le préfixe");
         assert!(m.matched_title.contains("Cyber Cross"));
         println!("matched: {} ({:.0}%)", m.matched_title, m.score * 100.0);
@@ -476,7 +617,7 @@ mod tests {
     fn fetch_fuzzy_fallback_matches_first_segment() {
         let dir = std::env::temp_dir().join("edlink-thumb-test-fuzzy-seg1");
         let _ = std::fs::remove_dir_all(&dir);
-        let m = tauri::async_runtime::block_on(fetch(&dir, "Bull Fight (J).pce", Kind::Boxart));
+        let m = tauri::async_runtime::block_on(fetch(&dir, &Source::Network, "Bull Fight (J).pce", Kind::Boxart));
         let m = m.expect("attendu : correspondance approchée trouvée sur le premier segment");
         assert!(m.matched_title.contains("Bull Fight"));
         println!("matched: {} ({:.0}%)", m.matched_title, m.score * 100.0);
@@ -489,7 +630,7 @@ mod tests {
     fn fetch_title_screen() {
         let dir = std::env::temp_dir().join("edlink-thumb-test-title");
         let _ = std::fs::remove_dir_all(&dir);
-        let m = tauri::async_runtime::block_on(fetch(&dir, "Dragon's Curse (U).pce", Kind::Title));
+        let m = tauri::async_runtime::block_on(fetch(&dir, &Source::Network, "Dragon's Curse (U).pce", Kind::Title));
         let m = m.expect("attendu : écran-titre trouvé via variante (USA)");
         assert_eq!(m.score, 1.0);
     }

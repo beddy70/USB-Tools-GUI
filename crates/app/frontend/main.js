@@ -30,7 +30,7 @@ const els = {
   gameBoxart: $("game-boxart"), gameBoxartPh: $("game-boxart-ph"),
   gameTitle: $("game-title"), gameMeta: $("game-meta"), gameMatchInfo: $("game-match-info"),
   gameSnapWrap: $("game-snap-wrap"), gameSnap: $("game-snap"), gameSnapLabel: $("game-snap-label"),
-  gamePlay: $("game-play"), gameDownload: $("game-download"),
+  gamePlay: $("game-play"), gameDownload: $("game-download"), gameFav: $("game-fav"),
   romPath: $("rom-path"), screenCard: $("screen-card"), screenImg: $("screen-img"),
   batW: $("bat-w"), batH: $("bat-h"), resW: $("res-w"), resH: $("res-h"),
   scrollX: $("scroll-x"), scrollY: $("scroll-y"),
@@ -492,6 +492,86 @@ function getMappedGameName(romName) {
   return mapped + ext;
 }
 
+// Source des pochettes : "network" (dépôts Libretro Thumbnails en ligne,
+// comportement historique) ou "local" (dossier DB_Thumbnails de
+// l'utilisateur, même arborescence — cf. thumbnails.rs côté Rust).
+const THUMB_SOURCE_KEY = "edlink.thumbSource";
+const THUMB_LOCAL_DIR_KEY = "edlink.thumbLocalDir";
+
+function getThumbSource() {
+  try { return localStorage.getItem(THUMB_SOURCE_KEY) === "local" ? "local" : "network"; }
+  catch { return "network"; }
+}
+function saveThumbSource(v) {
+  try { localStorage.setItem(THUMB_SOURCE_KEY, v); } catch { /* tant pis */ }
+}
+function getThumbLocalDir() {
+  try { return localStorage.getItem(THUMB_LOCAL_DIR_KEY) || ""; }
+  catch { return ""; }
+}
+function saveThumbLocalDir(v) {
+  try { localStorage.setItem(THUMB_LOCAL_DIR_KEY, v); } catch { /* tant pis */ }
+}
+
+let thumbSource = getThumbSource();
+let thumbLocalDir = getThumbLocalDir();
+
+// Prêt à interroger : réseau toujours, local seulement une fois un dossier
+// choisi (sinon on n'appelle pas fetch_boxart/fetch_game_media du tout — pas
+// de repli silencieux sur le réseau qui trahirait le mode "local" choisi).
+function thumbReady() {
+  return thumbSource === "network" || !!thumbLocalDir;
+}
+function thumbArgs() {
+  return { source: thumbSource, local_dir: thumbSource === "local" ? thumbLocalDir : null };
+}
+
+// Favoris : jeux marqués via le ♡/♥ de la fiche de détail, indépendamment de
+// leur catégorie/dossier — accessibles depuis la catégorie virtuelle Favoris
+// en tête de la liste (cf. buildCategoryList). Persistés par chemin complet
+// (`full`) sur la carte SD ; taille mémorisée au moment de l'ajout (affichage
+// seulement, peut devenir périmée si le fichier change ensuite).
+const FAVORITES_KEY = "edlink.favorites";
+
+function getFavorites() {
+  try { return JSON.parse(localStorage.getItem(FAVORITES_KEY) || "[]"); }
+  catch { return []; }
+}
+function saveFavorites(list) {
+  try { localStorage.setItem(FAVORITES_KEY, JSON.stringify(list)); } catch { /* tant pis */ }
+}
+function isFavorite(full) {
+  return getFavorites().some((f) => f.full === full);
+}
+function addFavorite(entry, full) {
+  const list = getFavorites();
+  if (!list.some((f) => f.full === full)) {
+    list.push({ full, name: entry.name, size: entry.size });
+    saveFavorites(list);
+  }
+}
+function removeFavorite(full) {
+  saveFavorites(getFavorites().filter((f) => f.full !== full));
+}
+function renameFavorite(oldFull, newFull, newName) {
+  const list = getFavorites();
+  const idx = list.findIndex((f) => f.full === oldFull);
+  if (idx !== -1) {
+    list[idx] = { ...list[idx], full: newFull, name: newName };
+    saveFavorites(list);
+  }
+}
+function toggleFavorite(entry, full) {
+  if (isFavorite(full)) removeFavorite(full); else addFavorite(entry, full);
+}
+
+// Catégories virtuelles de l'onglet GAMES (en plus des vrais sous-dossiers) :
+// Favoris est toujours proposée ; GAMES n'apparaît que si le dossier de base
+// ne contient aucun sous-dossier catégorie (accès direct aux ROM posées à la
+// racine, plutôt qu'un message d'erreur bloquant).
+const VIRTUAL_FAVORITES_CATEGORY = "\0favorites";
+const VIRTUAL_ROOT_CATEGORY = "\0root";
+
 let gamesRoot = getGamesRoot();
 let gamesLevel = "categories"; // "categories" | "mosaic"
 let gamesCategory = null;
@@ -555,11 +635,53 @@ async function renderGamesBrowser() {
     gamesLevel = "categories";
     renderGamesTab();
   });
+  // Source des pochettes : réseau (Libretro Thumbnails) ou dossier local
+  // DB_Thumbnails (même arborescence, cf. thumbnails.rs). Changer de source
+  // invalide le cache mémoire (les résultats peuvent différer) et redessine.
+  const sourceSelect = document.createElement("select");
+  sourceSelect.className = "thumb-source-select";
+  sourceSelect.title = t("games.thumbSourceTitle");
+  const optNet = document.createElement("option");
+  optNet.value = "network"; optNet.textContent = t("games.thumbSourceNetwork");
+  const optLoc = document.createElement("option");
+  optLoc.value = "local"; optLoc.textContent = t("games.thumbSourceLocal");
+  sourceSelect.append(optNet, optLoc);
+  sourceSelect.value = thumbSource;
+  const pickDirBtn = document.createElement("button");
+  pickDirBtn.className = "btn ghost";
+  pickDirBtn.textContent = "📁";
+  pickDirBtn.hidden = thumbSource !== "local";
+  pickDirBtn.title = thumbLocalDir
+    ? t("games.thumbLocalDirTitle", { dir: thumbLocalDir })
+    : t("games.thumbLocalDirPick");
+  pickDirBtn.addEventListener("click", async () => {
+    const dir = await safeInvoke("pick_folder");
+    if (!dir) return;
+    thumbLocalDir = dir;
+    saveThumbLocalDir(dir);
+    boxartCache.clear();
+    renderGamesTab();
+  });
+  sourceSelect.addEventListener("change", () => {
+    thumbSource = sourceSelect.value;
+    saveThumbSource(thumbSource);
+    boxartCache.clear();
+    renderGamesTab();
+  });
+  actions.appendChild(sourceSelect);
+  actions.appendChild(pickDirBtn);
   actions.appendChild(refresh);
   actions.appendChild(gear);
   bar.appendChild(rootLabel);
   bar.appendChild(actions);
   container.appendChild(bar);
+
+  if (thumbSource === "local" && !thumbLocalDir) {
+    const hint = document.createElement("div");
+    hint.className = "games-hint";
+    hint.textContent = t("games.thumbLocalDirHint");
+    container.appendChild(hint);
+  }
 
   container.appendChild(
     gamesLevel === "mosaic" ? await buildMosaic() : await buildCategoryList()
@@ -581,23 +703,35 @@ async function buildCategoryList() {
   }
   const dirs = entries.filter((e) => e.is_dir)
     .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+
+  // Catégories virtuelles, en tête de liste : Favoris est toujours proposée
+  // (jeux marqués ♥ dans leur fiche détail, quelle que soit leur catégorie
+  // réelle) ; GAMES n'apparaît que si la racine ne contient aucun sous-dossier
+  // catégorie — accès direct aux ROM posées à la racine plutôt qu'un message
+  // d'erreur bloquant.
+  const items = [
+    { key: VIRTUAL_FAVORITES_CATEGORY, label: t("games.favoritesTitle"), icon: "❤️" },
+  ];
   if (!dirs.length) {
-    return gamesError(t("games.noCategoriesError", { path: gamesRoot }));
+    items.push({ key: VIRTUAL_ROOT_CATEGORY, label: "GAMES", icon: "🎮" });
+  }
+  for (const d of dirs) {
+    items.push({ key: d.name, label: d.name.toUpperCase(), icon: categoryIcon(d.name) });
   }
 
   const list = document.createElement("div");
   list.className = "cat-list";
-  dirs.forEach((entry, i) => {
+  items.forEach((item, i) => {
     const [c1, c2] = CATEGORY_PALETTE[i % CATEGORY_PALETTE.length];
     const row = document.createElement("div");
     row.className = "cat-row";
     row.style.background = `linear-gradient(120deg, ${c1}, ${c2})`;
     const icon = document.createElement("div");
     icon.className = "cat-icon";
-    icon.textContent = categoryIcon(entry.name);
+    icon.textContent = item.icon;
     const title = document.createElement("div");
     title.className = "cat-title";
-    title.textContent = entry.name.toUpperCase();
+    title.textContent = item.label;
     const chev = document.createElement("div");
     chev.className = "cat-chev";
     chev.textContent = "›";
@@ -605,7 +739,7 @@ async function buildCategoryList() {
     row.appendChild(title);
     row.appendChild(chev);
     row.addEventListener("click", () => {
-      gamesCategory = entry.name;
+      gamesCategory = item.key;
       gamesCategoryColors = [c1, c2];
       gamesLevel = "mosaic";
       renderGamesTab();
@@ -622,6 +756,12 @@ async function buildMosaic() {
   const [c1, c2] = gamesCategoryColors || CATEGORY_PALETTE[0];
   wrap.style.background = `linear-gradient(160deg, ${c1}, ${c2})`;
 
+  const isFavorites = gamesCategory === VIRTUAL_FAVORITES_CATEGORY;
+  const isVirtualRoot = gamesCategory === VIRTUAL_ROOT_CATEGORY;
+  // Favoris : pas de dossier réel, `catPath` ne s'applique pas. GAMES virtuel :
+  // liste directement la racine (les ROM y sont posées sans sous-dossier).
+  const catPath = isFavorites ? null : (isVirtualRoot ? gamesRoot : joinSdPath(gamesRoot, gamesCategory));
+
   const header = document.createElement("div");
   header.className = "mosaic-header";
   const back = document.createElement("button");
@@ -629,36 +769,45 @@ async function buildMosaic() {
   back.addEventListener("click", () => { gamesLevel = "categories"; renderGamesTab(); });
   const title = document.createElement("h3");
   title.className = "mosaic-title";
-  title.textContent = gamesCategory;
+  title.textContent = isFavorites ? t("games.favoritesTitle") : (isVirtualRoot ? "GAMES" : gamesCategory);
   header.appendChild(back);
   header.appendChild(title);
   wrap.appendChild(header);
 
-  const catPath = joinSdPath(gamesRoot, gamesCategory);
-  const entries = await safeInvoke("list_sd", { path: catPath });
   const status = document.createElement("div");
   status.className = "mosaic-status";
   wrap.appendChild(status);
 
-  if (!entries) {
-    status.textContent = t("games.mosaicListError", { path: catPath });
-    return wrap;
+  let games;
+  if (isFavorites) {
+    // Chaque favori mémorise déjà son chemin complet (`full`) : pas de
+    // list_sd, juste { name, size, is_dir: false, full } directement utilisable.
+    games = getFavorites()
+      .map((f) => ({ name: f.name, size: f.size, is_dir: false, full: f.full }))
+      .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+  } else {
+    const entries = await safeInvoke("list_sd", { path: catPath });
+    if (!entries) {
+      status.textContent = t("games.mosaicListError", { path: catPath });
+      return wrap;
+    }
+    games = entries.filter(isRomFile)
+      .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
   }
-  const games = entries.filter(isRomFile)
-    .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+
   status.textContent = games.length <= 1
     ? t("games.oneGameAvailable", { count: games.length })
     : t("games.gamesAvailable", { count: games.length });
 
   if (!games.length) {
-    wrap.appendChild(gamesError(t("games.noRomsError", { path: catPath })));
+    wrap.appendChild(gamesError(isFavorites ? t("games.noFavoritesError") : t("games.noRomsError", { path: catPath })));
     return wrap;
   }
 
   const grid = document.createElement("div");
   grid.className = "mosaic-grid";
   for (const entry of games) {
-    const full = joinSdPath(catPath, entry.name);
+    const full = isFavorites ? entry.full : joinSdPath(catPath, entry.name);
     const card = document.createElement("div");
     card.className = "mosaic-card";
     const frame = document.createElement("div");
@@ -723,9 +872,10 @@ let gamesRenderSeq = 0;
 // similarité de texte dans l'index du dépôt — cf. thumbnails.rs) ; `null` =
 // aucune pochette trouvée (mis en cache pour ne pas réessayer à chaque rendu).
 async function loadBoxartInto(romName, frame, seq) {
+  if (!thumbReady()) return; // mode local sans dossier choisi : pas d'appel, on garde le placeholder
   let cached = boxartCache.get(romName);
   if (cached === undefined) {
-    const res = await safeInvoke("fetch_boxart", { name: getMappedGameName(romName) });
+    const res = await safeInvoke("fetch_boxart", { name: getMappedGameName(romName), ...thumbArgs() });
     cached = res && res.png_base64
       ? { dataUri: "data:image/png;base64," + res.png_base64, matchedTitle: res.matched_title, score: res.score }
       : null;
@@ -865,7 +1015,7 @@ async function confirmMatch(cached) {
   if (gameMatchInfoTimer) { clearTimeout(gameMatchInfoTimer); gameMatchInfoTimer = null; }
   els.gameMatchInfo.hidden = true;
 
-  const res = await safeInvoke("fetch_boxart", { name: getMappedGameName(entry.name) });
+  const res = await safeInvoke("fetch_boxart", { name: getMappedGameName(entry.name), ...thumbArgs() });
   if (res && res.png_base64) {
     const fresh = {
       dataUri: "data:image/png;base64," + res.png_base64,
@@ -901,6 +1051,7 @@ function openGameModal(entry, full) {
   if (gameMatchInfoTimer) { clearTimeout(gameMatchInfoTimer); gameMatchInfoTimer = null; }
   els.gameMatchInfo.hidden = true;
   stopSnapSlideshow();
+  updateFavBtn(full);
   els.gameModal.hidden = false;
 
   const cached = boxartCache.get(entry.name);
@@ -911,7 +1062,9 @@ function openGameModal(entry, full) {
     showMatchInfo(cached);
   }
 
-  safeInvoke("fetch_game_media", { name: getMappedGameName(entry.name) }).then((media) => {
+  if (!thumbReady()) return; // mode local sans dossier choisi
+
+  safeInvoke("fetch_game_media", { name: getMappedGameName(entry.name), ...thumbArgs() }).then((media) => {
     if (!media || gameModalTarget?.entry !== entry) return; // fermé/changé entre-temps
     if (media.boxart.png_base64 && confirmedEntryName !== entry.name) {
       const found = {
@@ -954,6 +1107,24 @@ els.gamePlay.addEventListener("click", () => {
 els.gameDownload.addEventListener("click", () => {
   if (!gameModalTarget) return;
   doDownloadSd(gameModalTarget.full);
+});
+
+// ♡/♥ de la fiche de détail : bascule ce jeu dans/hors des favoris (catégorie
+// virtuelle "Favoris" de l'onglet GAMES, indépendante de son vrai dossier).
+function updateFavBtn(full) {
+  const fav = isFavorite(full);
+  els.gameFav.textContent = fav ? "♥" : "♡";
+  els.gameFav.classList.toggle("active", fav);
+  els.gameFav.title = t(fav ? "games.favRemoveTitle" : "games.favAddTitle");
+}
+els.gameFav.addEventListener("click", () => {
+  if (!gameModalTarget) return;
+  const { entry, full } = gameModalTarget;
+  toggleFavorite(entry, full);
+  updateFavBtn(full);
+  // Retirer un favori pendant qu'on est dans la vue Favoris doit le faire
+  // disparaître de la mosaïque derrière la fiche (élément séparé, reste ouverte).
+  if (gamesLevel === "mosaic" && gamesCategory === VIRTUAL_FAVORITES_CATEGORY) renderGamesTab();
 });
 
 function setView(v) {
@@ -1095,7 +1266,8 @@ els.sdCtxMenu.addEventListener("click", async (e) => {
     const res = await safeInvoke("delete_sd", { path: full });
     if (res !== null) {
       log(t("sd.deletedLog", { name: entry.name }), "ok");
-      renderExplorer();
+      removeFavorite(full); // évite un favori fantôme sur un fichier effacé
+      refreshAfterSdChange();
     }
   } else if (action === "rename") {
     const newName = await askPrompt(t("sd.renamePrompt"), entry.name);
@@ -1103,10 +1275,19 @@ els.sdCtxMenu.addEventListener("click", async (e) => {
     const res = await safeInvoke("rename_sd", { path: full, new_name: newName });
     if (res !== null) {
       log(t("sd.renamedLog", { name: newName }), "ok");
-      renderExplorer();
+      const parent = full.includes("/") ? full.slice(0, full.lastIndexOf("/")) : "";
+      renameFavorite(full, parent ? `${parent}/${newName}` : newName, newName);
+      refreshAfterSdChange();
     }
   }
 });
+
+// Le menu contextuel est partagé entre l'explorateur Carte SD et l'onglet
+// GAMES (mosaïque/favoris) : rafraîchit celui réellement affiché.
+function refreshAfterSdChange() {
+  if ($("tab-games").classList.contains("active")) renderGamesTab();
+  else renderExplorer();
+}
 
 async function uploadOne(local) {
   const name = local.split(/[\\/]/).pop();

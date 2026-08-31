@@ -16,6 +16,12 @@ reference/
 *.log
 /tmp/
 
+# Pochettes locales (mode "local" du sélecteur de source, onglet GAMES) :
+# dossier choisi par l'utilisateur, potentiellement volumineux (images) —
+# jamais suivi, où qu'il se trouve dans le dépôt.
+DB_Thumbnails/
+**/DB_Thumbnails/
+
 # Builds / binaires publiés (dossiers de mise en forme temporaires — seules
 # les archives finales sous downloads/ sont suivies, voir l'exception plus bas)
 dist-windows/
