@@ -77,9 +77,16 @@ sd:/GAMES
 ```
 
 Each **top-level subfolder** of `sd:/GAMES` becomes a category; the ROM
-files (`.pce`, `.sgx`, `.rom`, `.bin`) it contains show up in its mosaic. A
-file placed directly in `sd:/GAMES`, without going through a subfolder,
-doesn't show up in this tab (use the **SD Card** tab to see/move it).
+files (`.pce`, `.sgx`, `.rom`, `.bin`) it contains show up in its mosaic.
+
+If `sd:/GAMES` (or your base folder) **has no subfolder at all**, a virtual
+**GAMES** category shows up automatically in the list to give direct access
+to ROMs placed at the root — no need to create a subfolder for just one or
+two games. Once at least one real category exists, a file left at the root
+without a subfolder only shows up in the **SD Card** tab (List/Icon view).
+
+A virtual **❤️ Favorites** category is always present at the top of the
+list, regardless — see [below](#favorites).
 
 The base folder doesn't have to be `sd:/GAMES`: click **⚙ Change games
 folder** at the top of the tab to point to another path (e.g. `sd:/ROMS`).
@@ -92,27 +99,59 @@ This choice is remembered on this computer.
 - **← Categories** at the top of the mosaic goes back to the list.
 - Click a **game** → its detail sheet opens: file size, path on the card,
   title screen and in-game snapshot (when found — they alternate
-  automatically every 2 seconds), **▶ Play** and **⬇ Download** buttons.
+  automatically every 2 seconds), a **♡/♥** (favorite) button, **▶ Play**
+  and **⬇ Download** buttons.
 - **Right-click** a mosaic thumbnail opens the same context menu as in the
   SD Card tab (Play, Rename, Download, Delete).
 
+### Favorites
+
+In a game's detail sheet, the **♡** button (top, next to the close cross)
+adds it to favorites — it turns into **♥**. Click it again to remove it.
+
+These games are then grouped under the virtual **❤️ Favorites** category, at
+the top of the GAMES tab's category list — handy for finding your favorite
+games without remembering which category they're filed under. The
+favorites list is remembered on this computer (the embedded browser's local
+storage); renaming or deleting a game from the context menu keeps this list
+up to date automatically.
+
 ### Boxart
 
-Boxart comes from the community [Libretro
-Thumbnails](https://github.com/libretro-thumbnails) database: this needs an
-internet connection (only to download images — never to talk to the
-cartridge), and results are cached on the computer so the network is never
-hit twice for a game already seen.
+Two boxart sources are available, chosen from the dropdown at the top of
+the tab:
 
-The match between the ROM file's name and the name used by that database
-isn't always exact (different naming conventions): when it's only an
-**approximate** match, a percentage badge appears on the thumbnail and in
-the detail sheet. Below a certain similarity threshold, or if no match is
-found, the thumbnail stays without boxart.
+- **🌐 Network (Libretro)** — the default. Boxart comes from the community
+  [Libretro Thumbnails](https://github.com/libretro-thumbnails) database:
+  this needs an internet connection (only to download images — never to
+  talk to the cartridge), and results are cached on the computer so the
+  network is never hit twice for a game already seen.
+- **💾 Local (DB_Thumbnails)** — reads images directly from a folder of your
+  choice, no internet needed. Click the **📁** button that appears next to
+  the dropdown to choose that folder; until a folder is chosen, a warning
+  message is shown and no boxart is looked up. The folder must directly
+  contain (no intermediate subfolder) images in the Libretro Thumbnails
+  repository format:
+  ```
+  DB_Thumbnails/
+   ├─ Named_Boxarts/<Title> (Region).png   ← boxart
+   ├─ Named_Snaps/<Title> (Region).png     ← in-game snapshot
+   └─ Named_Titles/<Title> (Region).png    ← title screen
+  ```
+  (the `Named_Logos` folder seen in some repositories isn't used by the
+  application). The simplest approach is to grab these three folders from a
+  PC-Engine/SuperGrafx Libretro Thumbnails repository and flatten them into
+  `DB_Thumbnails`, without keeping the source repository's subfolder.
+
+In both modes, the match between the ROM file's name and the name used by
+the database isn't always exact (different naming conventions): when it's
+only an **approximate** match, a percentage badge appears on the thumbnail
+and in the detail sheet. Below a certain similarity threshold, or if no
+match is found, the thumbnail stays without boxart.
 
 **To fix missing or wrong boxart**: hover the thumbnail in the mosaic,
 click the small **⚙** button that appears, and enter the exact title as it
-appears in the Libretro database (without the extension). It's remembered
+appears in the chosen database (without the extension). It's remembered
 for next time.
 
 ## SD Card tab
@@ -231,9 +270,10 @@ Yes, as long as you're using the application — the cartridge's USB link
 depends on the console being powered.
 
 **Can I use the application without an internet connection?**
-Yes, for everything except the GAMES tab's boxart (see above): connecting
-to the cartridge, transferring files, screen capture, memory and sprites
-all work entirely offline.
+Yes, including the GAMES tab's boxart by choosing the **💾 Local
+(DB_Thumbnails)** source (see above): connecting to the cartridge,
+transferring files, screen capture, memory, sprites and favorites all work
+entirely offline. Only the **🌐 Network** boxart source needs internet.
 
 **Where are the games folder and boxart mappings stored?**
 In the local storage of the browser embedded in the application, specific

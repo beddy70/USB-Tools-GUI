@@ -71,7 +71,7 @@ binaire non signé) et [`GUIDE_UTILISATEUR.md`](docs/GUIDE_UTILISATEUR.md).
 | **Connexion** | Détection automatique du port série de la carte (ou choix manuel) |
 | **Infos carte** (`devinf`) | Nom, n° de série, versions, compteurs, tensions |
 | **Carte SD** (onglet) | Explorateur ; envoi (glisser‑déposer) et téléchargement de fichiers via le protocole FatFs de la carte, avec barre de progression ; clic droit sur un fichier → menu contextuel (Jouer, Renommer, Télécharger, Effacer) |
-| **GAMES** (onglet 🕹️, sous Connexion) | Navigateur en deux niveaux ancré sur un dossier de base configurable (défaut `sd:/GAMES`, persisté) : liste colorée des sous-dossiers (catégories, ex. Action/RPG/Plateforme) façon Recalbox, puis mosaïque des ROM de la catégorie (fond repris de la couleur de la catégorie) avec jaquette [Libretro Thumbnails](https://github.com/libretro-thumbnails) (correspondance exacte puis recherche approchée avec score, ⚙ pour corriger manuellement — nécessite Internet, mise en cache locale) ; clic sur un jeu → fiche détaillée (taille, écran-titre et capture en jeu alternés toutes les 2 s) avec « Jouer » et « Télécharger » |
+| **GAMES** (onglet 🕹️, sous Connexion) | Navigateur en deux niveaux ancré sur un dossier de base configurable (défaut `sd:/GAMES`, persisté) : liste colorée des sous-dossiers (catégories, ex. Action/RPG/Plateforme) façon Recalbox, plus deux catégories virtuelles — **Favoris** (toujours présente : jeux marqués ♡/♥ dans leur fiche détail, indépendamment de leur dossier) et **GAMES** (apparaît seulement si le dossier de base n'a aucun sous-dossier catégorie, pour accéder directement aux ROM posées à la racine) — puis mosaïque des ROM de la catégorie (fond repris de la couleur de la catégorie) avec jaquette au choix **en ligne** ([Libretro Thumbnails](https://github.com/libretro-thumbnails), correspondance exacte puis recherche approchée avec score, ⚙ pour corriger manuellement, nécessite Internet) ou **locale** (dossier `DB_Thumbnails` choisi par l'utilisateur — même algorithme de correspondance, hors ligne, structure `Named_Boxarts`/`Named_Snaps`/`Named_Titles`) ; clic sur un jeu → fiche détaillée (taille, écran-titre et capture en jeu alternés toutes les 2 s, bouton ♡/♥ favoris) avec « Jouer » et « Télécharger » |
 | **Lancer un jeu** (`run`) | Déploie la ROM sur la SD (`sd:/usb-games/`) puis la lance |
 | **Reset** | Réinitialise la console |
 | **Capture d'écran** | Capture le menu de la carte (VRAM + palette → PNG) |
@@ -284,27 +284,43 @@ Reprend la palette « retrowave » de l'application.
   envoyé) — cf. `docs/PROTOCOL.md`. Fonctionne sur l'émulateur ; à
   reconfirmer sur matériel réel.
 - **Vue « Jeux »** : suppose une arborescence `<dossier de base>/<Catégorie>/<ROM>`
-  (ex. `sd:/GAMES/Action/Jeu.pce`) — un fichier posé directement dans le
-  dossier de base, sans sous-dossier catégorie, n'apparaît pas dans cette
-  vue (utiliser la vue Liste/Icônes pour tout voir). Le dossier de base est
-  mémorisé dans le stockage local du navigateur intégré (persiste entre
-  lancements de l'appli, propre à la machine).
-- **Jaquettes** : correspondance par nom entre le fichier ROM
-  (souvent en convention GoodTools/TOSEC, ex. « Jeu (U).pce ») et la base
-  Libretro (convention No-Intro, « Jeu (USA).png »), en deux temps : d'abord
-  quelques substitutions de code région connues (confiance 100%), puis en
-  repli une **recherche au plus proche** dans l'index complet du dépôt
-  (téléchargé une fois via l'API GitHub, mis en cache indéfiniment) —
-  correspondance acceptée à partir de 80% de similarité de texte ; en dessous,
-  ou par prudence, la fiche de détail affiche le titre trouvé et son score
-  quand ce n'est pas une variante exacte. Nécessite une connexion Internet
-  (requêtes HTTPS vers `raw.githubusercontent.com`/`api.github.com` depuis le
-  backend Rust, jamais depuis la carte/le port série) ; résultats mis en cache
-  localement (dossier cache de l'application) après le premier essai, y
-  compris les échecs, pour ne plus jamais retaper le réseau pour un jeu déjà
-  su sans jaquette. Pour corriger un jeu non trouvé ou mal trouvé : bouton ⚙
-  sur sa vignette (mosaïque) pour associer manuellement le titre exact tel qu'il
-  apparaît dans Libretro Thumbnails — association mémorisée (stockage local).
+  (ex. `sd:/GAMES/Action/Jeu.pce`). Si le dossier de base ne contient aucun
+  sous-dossier catégorie, une catégorie virtuelle **GAMES** apparaît
+  automatiquement pour donner accès direct aux ROM posées à la racine ; dès
+  qu'au moins un vrai sous-dossier existe, un fichier posé directement à la
+  racine sans catégorie n'apparaît que dans la vue Liste/Icônes de l'onglet
+  Carte SD. Une catégorie virtuelle **Favoris** (jeux marqués ♡/♥ dans leur
+  fiche détail) est toujours présente en tête de liste, quel que soit le
+  contenu du dossier de base. Le dossier de base, les favoris et les
+  associations de jaquettes sont mémorisés dans le stockage local du
+  navigateur intégré (persiste entre lancements de l'appli, propre à la
+  machine).
+- **Jaquettes** : deux sources au choix (sélecteur dans l'onglet GAMES) :
+  - **En ligne** — correspondance par nom entre le fichier ROM (souvent en
+    convention GoodTools/TOSEC, ex. « Jeu (U).pce ») et la base Libretro
+    Thumbnails (convention No-Intro, « Jeu (USA).png »), en deux temps :
+    d'abord quelques substitutions de code région connues (confiance 100%),
+    puis en repli une **recherche au plus proche** dans l'index complet du
+    dépôt (téléchargé une fois via l'API GitHub, mis en cache indéfiniment) —
+    correspondance acceptée à partir de 80% de similarité de texte. Nécessite
+    une connexion Internet (requêtes HTTPS vers
+    `raw.githubusercontent.com`/`api.github.com` depuis le backend Rust,
+    jamais depuis la carte/le port série) ; résultats mis en cache localement
+    (dossier cache de l'application) après le premier essai, y compris les
+    échecs.
+  - **Locale** — même algorithme de correspondance, mais lu directement dans
+    un dossier `DB_Thumbnails` choisi sur le disque (bouton 📁), avec la
+    structure `DB_Thumbnails/Named_Boxarts|Named_Snaps|Named_Titles/<titre No-Intro>.png`
+    (pas de sous-dossier par système : l'app ne gère que la PC-Engine/
+    SuperGrafx). Fonctionne entièrement hors ligne ; pratique pour cloner une
+    fois un dépôt libretro-thumbnails en local (en reprenant seulement ces
+    trois dossiers, à plat, sans le niveau `NEC_-_PC_Engine_-_TurboGrafx_16`/
+    `NEC_-_PC_Engine_SuperGrafx` du dépôt d'origine).
+  - Dans les deux modes : en dessous du seuil, ou par prudence, la fiche de
+    détail affiche le titre trouvé et son score quand ce n'est pas une
+    variante exacte. Pour corriger un jeu non trouvé ou mal trouvé : bouton ⚙
+    sur sa vignette (mosaïque) pour associer manuellement le titre exact tel
+    qu'il apparaît dans la base — association mémorisée (stockage local).
 - **TED Pro non compatible RTC** via `edlink` (`RtcSet`/`RtcCal` lèvent
   `UnsupportedCmd`) : le RTC n'est pas exposé.
 - **Lecture mémoire (`memrd`) = bus cartouche** : sur matériel réel, chaque
@@ -330,7 +346,9 @@ Reprend la palette « retrowave » de l'application.
   conservateur sur matériel, VRAM/CRAM via `*v`) ; planche de tuiles VRAM
   (sprites) ; détection émulateur/matériel ; version de build injectée à la
   compilation ; grille de test QA autonome (`docs/qa-checklist.html`) ;
-  localisation complète FR/EN/DE/ES de l'interface.
+  localisation complète FR/EN/DE/ES de l'interface ; source de pochettes
+  au choix (Libretro Thumbnails en ligne ou dossier `DB_Thumbnails` local) ;
+  catégories virtuelles GAMES (racine sans sous-dossier) et Favoris.
 - **M3** Sauvegarde/chargement de HuCard complète (via `memrd`/`memwr`), tests
   de vitesse USB (`usbspd`), diagnostics (`diag`).
 - **M4** Packager/icônes finales, intégration continue, validations multiplateforme.

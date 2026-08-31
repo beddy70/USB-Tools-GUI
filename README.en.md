@@ -72,7 +72,7 @@ guide).
 | **Connection** | Automatic detection of the cartridge's serial port (or manual choice) |
 | **Cartridge info** (`devinf`) | Name, serial number, versions, counters, voltages |
 | **SD Card** (tab) | Explorer; drag-and-drop upload and download of files via the cartridge's FatFs protocol, with a progress bar; right-click a file → context menu (Play, Rename, Download, Delete) |
-| **GAMES** (🕹️ tab, below Connection) | Two-level browser anchored on a configurable base folder (default `sd:/GAMES`, persisted): a colorful list of subfolders (categories, e.g. Action/RPG/Platformer) in a Recalbox-like style, then a mosaic of the category's ROMs (background tinted with the category's color) with boxart from [Libretro Thumbnails](https://github.com/libretro-thumbnails) (exact match then fuzzy search with a score, ⚙ to fix manually — requires internet, cached locally); clicking a game opens a detail sheet (size, title screen and in-game snapshot alternating every 2s) with "Play" and "Download" |
+| **GAMES** (🕹️ tab, below Connection) | Two-level browser anchored on a configurable base folder (default `sd:/GAMES`, persisted): a colorful list of subfolders (categories, e.g. Action/RPG/Platformer) in a Recalbox-like style, plus two virtual categories — **Favorites** (always present: games marked ♡/♥ in their detail sheet, regardless of their folder) and **GAMES** (shows up only when the base folder has no category subfolder, for direct access to ROMs placed at the root) — then a mosaic of the category's ROMs (background tinted with the category's color) with boxart from either **online** ([Libretro Thumbnails](https://github.com/libretro-thumbnails), exact match then fuzzy search with a score, ⚙ to fix manually, requires internet) or a **local** source (a user-chosen `DB_Thumbnails` folder — same matching algorithm, offline, `Named_Boxarts`/`Named_Snaps`/`Named_Titles` structure); clicking a game opens a detail sheet (size, title screen and in-game snapshot alternating every 2s, ♡/♥ favorite button) with "Play" and "Download" |
 | **Launch a game** (`run`) | Deploys the ROM to the SD card (`sd:/usb-games/`) then launches it |
 | **Reset** | Resets the console |
 | **Screen capture** | Captures the cartridge's menu (VRAM + palette → PNG) |
@@ -281,28 +281,41 @@ palette.
   being sent) — see `docs/PROTOCOL.md`. Works on the emulator; to be
   reconfirmed on real hardware.
 - **"Games" view**: assumes a `<base folder>/<Category>/<ROM>` tree (e.g.
-  `sd:/GAMES/Action/Game.pce`) — a file placed directly in the base folder,
-  without a category subfolder, doesn't show up in this view (use the
-  List/Icon view to see everything). The base folder is remembered in the
-  embedded browser's local storage (persists across app launches, specific
-  to the machine).
-- **Boxart**: name matching between the ROM file (often in GoodTools/TOSEC
-  convention, e.g. "Game (U).pce") and the Libretro database (No-Intro
-  convention, "Game (USA).png"), in two steps: first a few known
-  region-code substitutions (100% confidence), then as a fallback a
-  **closest match search** across the repository's full index (downloaded
-  once via the GitHub API, cached indefinitely) — a match is accepted from
-  80% text similarity upward; below that, or out of caution, the detail
-  sheet shows the title found and its score when it isn't an exact variant.
-  Requires an internet connection (HTTPS requests to
-  `raw.githubusercontent.com`/`api.github.com` from the Rust backend, never
-  from the cartridge/serial port); results are cached locally (the app's
-  cache folder) after the first attempt, including failures, so the network
-  is never hit twice for a game already known to have no boxart. To fix a
-  game that wasn't found or was matched wrong: the ⚙ button on its
-  thumbnail (mosaic) lets you manually associate the exact title as it
-  appears in Libretro Thumbnails — the mapping is remembered (local
-  storage).
+  `sd:/GAMES/Action/Game.pce`). If the base folder has no category
+  subfolder at all, a virtual **GAMES** category shows up automatically to
+  give direct access to ROMs placed at the root; once at least one real
+  subfolder exists, a file placed directly at the root without a category
+  only shows up in the SD Card tab's List/Icon view. A virtual **Favorites**
+  category (games marked ♡/♥ in their detail sheet) is always present at
+  the top of the list, regardless of the base folder's contents. The base
+  folder, favorites and boxart mappings are remembered in the embedded
+  browser's local storage (persists across app launches, specific to the
+  machine).
+- **Boxart**: two sources to choose from (selector in the GAMES tab):
+  - **Online** — name matching between the ROM file (often in GoodTools/
+    TOSEC convention, e.g. "Game (U).pce") and the Libretro Thumbnails
+    database (No-Intro convention, "Game (USA).png"), in two steps: first a
+    few known region-code substitutions (100% confidence), then as a
+    fallback a **closest match search** across the repository's full index
+    (downloaded once via the GitHub API, cached indefinitely) — a match is
+    accepted from 80% text similarity upward. Requires an internet
+    connection (HTTPS requests to
+    `raw.githubusercontent.com`/`api.github.com` from the Rust backend,
+    never from the cartridge/serial port); results are cached locally (the
+    app's cache folder) after the first attempt, including failures.
+  - **Local** — same matching algorithm, but read directly from a
+    user-chosen `DB_Thumbnails` folder on disk (📁 button), with the
+    structure `DB_Thumbnails/Named_Boxarts|Named_Snaps|Named_Titles/<No-Intro title>.png`
+    (no per-system subfolder: the app only handles PC-Engine/SuperGrafx).
+    Works fully offline; handy for cloning a libretro-thumbnails repository
+    once locally (keeping only these three folders, flattened, without the
+    source repository's `NEC_-_PC_Engine_-_TurboGrafx_16`/
+    `NEC_-_PC_Engine_SuperGrafx` level).
+  - In both modes: below the threshold, or out of caution, the detail sheet
+    shows the title found and its score when it isn't an exact variant. To
+    fix a game that wasn't found or was matched wrong: the ⚙ button on its
+    thumbnail (mosaic) lets you manually associate the exact title as it
+    appears in the database — the mapping is remembered (local storage).
 - **TED Pro is not RTC-compatible** via `edlink` (`RtcSet`/`RtcCal` raise
   `UnsupportedCmd`): the RTC isn't exposed.
 - **Memory read (`memrd`) = cartridge bus**: on real hardware, every read
@@ -327,7 +340,9 @@ palette.
   mode on hardware, VRAM/CRAM via `*v`); VRAM tile sheet (sprites);
   emulator/hardware detection; build version injected at compile time;
   standalone QA test checklist (`docs/qa-checklist.html`); full FR/EN/DE/ES
-  localization of the GUI.
+  localization of the GUI; choice of boxart source (online Libretro
+  Thumbnails or a local `DB_Thumbnails` folder); virtual GAMES (root with no
+  subfolder) and Favorites categories.
 - **M3** Full HuCard save/load (via `memrd`/`memwr`), USB speed tests
   (`usbspd`), diagnostics (`diag`).
 - **M4** Final packaging/icons, continuous integration, cross-platform

@@ -79,9 +79,17 @@ sd:/GAMES
 
 Chaque **sous-dossier de premier niveau** de `sd:/GAMES` devient une
 catégorie ; les fichiers ROM (`.pce`, `.sgx`, `.rom`, `.bin`) qu'il contient
-apparaissent dans sa mosaïque. Un fichier posé directement dans `sd:/GAMES`
-sans passer par un sous-dossier n'apparaît pas dans cet onglet (utilisez
-l'onglet **Carte SD** pour le voir/le déplacer).
+apparaissent dans sa mosaïque.
+
+Si `sd:/GAMES` (ou votre dossier de base) **ne contient aucun sous-dossier**,
+une catégorie virtuelle **GAMES** apparaît automatiquement dans la liste pour
+donner accès directement aux ROM posées à la racine — pas besoin de créer un
+sous-dossier juste pour un ou deux jeux. Dès qu'au moins une vraie catégorie
+existe, un fichier resté à la racine sans sous-dossier n'apparaît plus que
+dans l'onglet **Carte SD** (vue Liste/Icônes).
+
+Une catégorie virtuelle **❤️ Favoris** est, elle, toujours présente en tête
+de liste — voir [plus bas](#les-favoris).
 
 Le dossier de base n'est pas obligatoirement `sd:/GAMES` : cliquez
 **⚙ Changer le dossier de jeux** en haut de l'onglet pour indiquer un autre
@@ -94,30 +102,65 @@ chemin (ex. `sd:/ROMS`). Ce choix est mémorisé sur cet ordinateur.
 - **← Catégories** en haut de la mosaïque revient à la liste.
 - Cliquez un **jeu** → sa fiche détaillée s'ouvre : taille du fichier, chemin
   sur la carte, écran-titre et capture en jeu (quand ils sont trouvés — ils
-  alternent automatiquement toutes les 2 secondes), boutons **▶ Jouer** et
-  **⬇ Télécharger**.
+  alternent automatiquement toutes les 2 secondes), bouton **♡/♥** (favoris),
+  boutons **▶ Jouer** et **⬇ Télécharger**.
 - **Clic droit** sur une vignette de la mosaïque ouvre le même menu
   contextuel que dans l'onglet Carte SD (Jouer, Renommer, Télécharger,
   Effacer).
 
+### Les favoris
+
+Dans la fiche détaillée d'un jeu, le bouton **♡** (en haut, à côté de la
+croix de fermeture) l'ajoute aux favoris — il devient **♥**. Cliquez à
+nouveau dessus pour le retirer.
+
+Ces jeux sont ensuite regroupés dans la catégorie virtuelle **❤️ Favoris**,
+en tête de la liste des catégories de l'onglet GAMES — pratique pour
+retrouver ses jeux préférés sans se souvenir dans quelle catégorie ils sont
+rangés. La liste des favoris est mémorisée sur cet ordinateur (stockage
+local du navigateur intégré) ; renommer ou effacer un jeu depuis le menu
+contextuel garde cette liste à jour automatiquement.
+
 ### Les pochettes
 
-Les jaquettes viennent de la base communautaire [Libretro
-Thumbnails](https://github.com/libretro-thumbnails) : ça nécessite une
-connexion Internet (uniquement pour télécharger les images — jamais pour
-parler à la carte), et les résultats sont mis en cache sur l'ordinateur pour
-ne plus jamais retaper le réseau pour un jeu déjà vu.
+Deux sources de pochettes sont disponibles, au choix via le menu déroulant
+en haut de l'onglet :
 
-La correspondance entre le nom du fichier ROM et le nom utilisé par cette
-base n'est pas toujours exacte (conventions de nommage différentes) : quand
-elle n'est qu'**approchée**, un badge de pourcentage apparaît sur la
-vignette et dans la fiche détaillée. En dessous d'un certain seuil de
-ressemblance, ou si aucune correspondance n'est trouvée, la vignette reste
-sans jaquette.
+- **🌐 Réseau (Libretro)** — comportement par défaut. Les jaquettes viennent
+  de la base communautaire [Libretro
+  Thumbnails](https://github.com/libretro-thumbnails) : ça nécessite une
+  connexion Internet (uniquement pour télécharger les images — jamais pour
+  parler à la carte), et les résultats sont mis en cache sur l'ordinateur
+  pour ne plus jamais retaper le réseau pour un jeu déjà vu.
+- **💾 Local (DB_Thumbnails)** — lit les images directement dans un dossier
+  de votre choix, sans connexion Internet. Cliquez le bouton **📁** qui
+  apparaît à côté du menu déroulant pour choisir ce dossier ; tant qu'aucun
+  dossier n'est choisi, un message d'avertissement s'affiche et aucune
+  pochette n'est cherchée. Le dossier doit contenir directement (sans
+  sous-dossier intermédiaire) les images au format des dépôts Libretro
+  Thumbnails :
+  ```
+  DB_Thumbnails/
+   ├─ Named_Boxarts/<Titre> (Région).png   ← jaquette
+   ├─ Named_Snaps/<Titre> (Région).png     ← capture en jeu
+   └─ Named_Titles/<Titre> (Région).png    ← écran-titre
+  ```
+  (le dossier `Named_Logos` visible dans certains dépôts n'est pas utilisé
+  par l'application). Le plus simple est de récupérer ces trois dossiers
+  depuis un dépôt Libretro Thumbnails PC-Engine/SuperGrafx et de les
+  regrouper à plat dans `DB_Thumbnails`, sans garder le sous-dossier du
+  dépôt d'origine.
+
+Dans les deux modes, la correspondance entre le nom du fichier ROM et le nom
+utilisé par la base n'est pas toujours exacte (conventions de nommage
+différentes) : quand elle n'est qu'**approchée**, un badge de pourcentage
+apparaît sur la vignette et dans la fiche détaillée. En dessous d'un certain
+seuil de ressemblance, ou si aucune correspondance n'est trouvée, la
+vignette reste sans jaquette.
 
 **Pour corriger une jaquette manquante ou erronée** : survolez la vignette
 dans la mosaïque, cliquez le petit bouton **⚙** qui apparaît, et indiquez le
-titre exact tel qu'il figure dans la base Libretro (sans l'extension). C'est
+titre exact tel qu'il figure dans la base choisie (sans l'extension). C'est
 mémorisé pour les prochaines fois.
 
 ## Onglet Carte SD
@@ -240,9 +283,11 @@ Oui, tant que vous utilisez l'application — la liaison USB de la carte
 dépend de l'alimentation de la console.
 
 **Puis-je utiliser l'application sans connexion Internet ?**
-Oui pour tout sauf les jaquettes de l'onglet GAMES (voir plus haut) : la
-connexion à la carte, le transfert de fichiers, la capture d'écran, la
-mémoire et les sprites fonctionnent entièrement hors ligne.
+Oui, y compris les jaquettes de l'onglet GAMES en choisissant la source
+**💾 Local (DB_Thumbnails)** (voir plus haut) : la connexion à la carte, le
+transfert de fichiers, la capture d'écran, la mémoire, les sprites et les
+favoris fonctionnent entièrement hors ligne. Seule la source **🌐 Réseau**
+des jaquettes nécessite Internet.
 
 **Où sont mémorisés le dossier de jeux et les associations de jaquettes ?**
 Dans le stockage local du navigateur intégré à l'application, propre à cet
