@@ -4,20 +4,23 @@
 //!   Thumbnails](https://github.com/libretro-thumbnails) (dépôts GitHub, un
 //!   par système, mis à jour par la communauté RetroArch) ;
 //! - **Local** ([`Source::Local`]) : un dossier `DB_Thumbnails` sur le
-//!   disque de l'utilisateur, avec exactement la même arborescence que les
-//!   dépôts ci-dessus (pratique pour cloner/copier une fois le dépôt en
-//!   local et travailler hors ligne) : `DB_Thumbnails/<dépôt>/<dossier>/`.
+//!   disque de l'utilisateur — SANS le niveau « dépôt par système » du mode
+//!   réseau (l'application ne gère que la PC-Engine/SuperGrafx, pas la peine
+//!   de distinguer) : `DB_Thumbnails/<dossier>/<titre>.png` directement.
 //!
-//! Dans les deux cas, l'arborescence attendue est celle des dépôts
-//! libretro-thumbnails : un sous-dossier par système
-//! (`NEC_-_PC_Engine_-_TurboGrafx_16` ou `NEC_-_PC_Engine_SuperGrafx`, selon
-//! l'extension de la ROM), lui-même contenant des dossiers d'images PNG
-//! nommées d'après le titre du jeu en convention *No-Intro* :
+//! Le mode réseau, lui, suit l'arborescence des dépôts libretro-thumbnails :
+//! un sous-dossier par système (`NEC_-_PC_Engine_-_TurboGrafx_16` ou
+//! `NEC_-_PC_Engine_SuperGrafx`, selon l'extension de la ROM), lui-même
+//! contenant des dossiers d'images PNG nommées d'après le titre du jeu en
+//! convention *No-Intro* :
 //!   `Named_Boxarts/<Titre> (Région).png`  — jaquette
 //!   `Named_Snaps/<Titre> (Région).png`    — capture en jeu
 //!   `Named_Titles/<Titre> (Région).png`   — écran-titre
 //!   `Named_Logos/<Titre> (Région).png`    — logo (présent côté dépôt, non
 //!                                            utilisé par cette application)
+//! Le mode local utilise ces mêmes noms de dossiers (`Named_Boxarts`,
+//! `Named_Snaps`, `Named_Titles`) mais directement sous la racine choisie,
+//! sans le sous-dossier système.
 //!
 //! Les noms de ROM sur une vraie carte SD suivent souvent une autre
 //! convention (GoodTools/TOSEC : « Dragon's Curse (U).pce ») que No-Intro
@@ -431,17 +434,19 @@ async fn fetch_network(cache_dir: &Path, rom_file_name: &str, kind: Kind) -> Opt
     None
 }
 
-/// Chemin de l'image `<root>/<repo>/<folder>/<titre>.png` en mode local.
-fn local_exact_path(root: &Path, repo: &str, folder: &str, title: &str) -> PathBuf {
-    root.join(repo).join(folder).join(format!("{}.png", sanitize(title)))
+/// Chemin de l'image `<root>/<folder>/<titre>.png` en mode local — pas de
+/// sous-dossier système (PC-Engine/SuperGrafx confondues, sans ambiguïté
+/// possible dans cette application) contrairement au mode réseau.
+fn local_exact_path(root: &Path, folder: &str, title: &str) -> PathBuf {
+    root.join(folder).join(format!("{}.png", sanitize(title)))
 }
 
-/// Liste des titres présents dans `<root>/<repo>/<folder>` — simple lecture
-/// de dossier (pas de mise en cache : c'est déjà local, donc rapide, et le
+/// Liste des titres présents dans `<root>/<folder>` — simple lecture de
+/// dossier (pas de mise en cache : c'est déjà local, donc rapide, et le
 /// contenu peut changer d'une fois à l'autre si l'utilisateur met à jour son
 /// dossier `DB_Thumbnails`).
-fn local_index(root: &Path, repo: &str, folder: &str) -> Vec<String> {
-    let dir = root.join(repo).join(folder);
+fn local_index(root: &Path, folder: &str) -> Vec<String> {
+    let dir = root.join(folder);
     let Ok(entries) = std::fs::read_dir(&dir) else {
         return Vec::new();
     };
@@ -455,22 +460,22 @@ fn local_index(root: &Path, repo: &str, folder: &str) -> Vec<String> {
 /// Mode local (dossier `DB_Thumbnails` de l'utilisateur) : même algorithme de
 /// correspondance que le mode réseau (variantes connues puis recherche au
 /// plus proche), mais lecture directe du disque — pas de requête HTTP, pas
-/// de cache (déjà local).
+/// de cache (déjà local), et pas de sous-dossier système (voir
+/// [`local_exact_path`]).
 fn fetch_local(root: &Path, rom_file_name: &str, kind: Kind) -> Option<ThumbMatch> {
-    let (stem, ext) = split_ext(rom_file_name);
-    let repo = repo_for_ext(&ext);
+    let (stem, _ext) = split_ext(rom_file_name);
     let folder = kind.folder();
 
     for variant in name_variants(stem) {
-        let path = local_exact_path(root, repo, folder, &variant);
+        let path = local_exact_path(root, folder, &variant);
         if let Ok(bytes) = std::fs::read(&path) {
             return Some(ThumbMatch { bytes, matched_title: variant, score: 1.0 });
         }
     }
 
-    let index = local_index(root, repo, folder);
+    let index = local_index(root, folder);
     if let Some((matched_title, score)) = best_fuzzy_match(stem, &index) {
-        let path = local_exact_path(root, repo, folder, &matched_title);
+        let path = local_exact_path(root, folder, &matched_title);
         if let Ok(bytes) = std::fs::read(&path) {
             return Some(ThumbMatch { bytes, matched_title, score });
         }
@@ -517,7 +522,7 @@ mod tests {
     fn fetch_local_exact_variant() {
         let dir = std::env::temp_dir().join("edlink-thumb-test-local-exact");
         let _ = std::fs::remove_dir_all(&dir);
-        let folder = dir.join(REPO_TG16).join("Named_Boxarts");
+        let folder = dir.join("Named_Boxarts");
         std::fs::create_dir_all(&folder).unwrap();
         std::fs::write(folder.join("Dragon's Curse (USA).png"), b"fake-png-bytes").unwrap();
 
@@ -537,7 +542,7 @@ mod tests {
     fn fetch_local_fuzzy_fallback() {
         let dir = std::env::temp_dir().join("edlink-thumb-test-local-fuzzy");
         let _ = std::fs::remove_dir_all(&dir);
-        let folder = dir.join(REPO_TG16).join("Named_Snaps");
+        let folder = dir.join("Named_Snaps");
         std::fs::create_dir_all(&folder).unwrap();
         std::fs::write(folder.join("Bomberman '93 (Japan).png"), b"fake").unwrap();
         std::fs::write(folder.join("Air Zonk (USA).png"), b"fake").unwrap();
@@ -557,7 +562,7 @@ mod tests {
     fn fetch_local_missing_returns_none() {
         let dir = std::env::temp_dir().join("edlink-thumb-test-local-missing");
         let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(dir.join(REPO_TG16).join("Named_Titles")).unwrap();
+        std::fs::create_dir_all(dir.join("Named_Titles")).unwrap();
         let m = tauri::async_runtime::block_on(fetch(
             &std::env::temp_dir(),
             &Source::Local(dir),
