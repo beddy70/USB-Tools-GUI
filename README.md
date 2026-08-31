@@ -59,6 +59,8 @@ binaire non signé) et [`GUIDE_UTILISATEUR.md`](docs/GUIDE_UTILISATEUR.md).
 - [Grille de test (QA)](#grille-de-test-qa)
 - [Limitations connues](#limitations-connues)
 - [Feuille de route](#feuille-de-route)
+- [Rôle de l'IA dans ce projet](#rôle-de-lia-dans-ce-projet)
+- [Contributeurs](#contributeurs)
 - [Dépôt](#dépôt)
 - [Références](#références)
 
@@ -370,6 +372,34 @@ Reprend la palette « retrowave » de l'application.
 - **M3** Sauvegarde/chargement de HuCard complète (via `memrd`/`memwr`), tests
   de vitesse USB (`usbspd`), diagnostics (`diag`).
 - **M4** Packager/icônes finales, intégration continue, validations multiplateforme.
+
+## Rôle de l'IA dans ce projet
+
+Ce projet est né d'un **cahier des charges** rédigé et développé par Eddy en
+collaboration avec une **IA locale** (DeepSeek V4 Flash). La première grande
+difficulté rencontrée a été de comprendre comment accéder au **lecteur de carte
+SD** de l'EverDrive : malgré de nombreux échanges avec **Claude** (Anthropic),
+aucune de ces deux IA n'est parvenue à lire correctement la carte SD.
+
+C'est finalement un **reverse engineering de l'exécutable** `turbolink.exe`,
+mené avec l'aide de **ChatGPT**, qui a permis de débloquer le problème : le
+désassemblage a révélé les points manquants du protocole (notamment l'argument
+`u16` attendu par `CMD_F_DIR_RD`, cf. `docs/PROTOCOL.md`), rendant possible
+l'interrogation propre de la **lecture/écriture de la carte SD**.
+
+Les IA ont ainsi joué un rôle **complémentaire et décisif** : assistance à
+l'architecture et au développement, exploration du protocole et analyse du
+binaire propriétaire — chacune apportant un éclairage différent sur un problème
+qu'aucune n'aurait résolu seule.
+
+## Contributeurs
+
+- **Eddy (beddy70)** — auteur : cahier des charges, développement et reverse
+  engineering.
+- **Cline** — assistant IA contributeur : génération et refonte de code,
+  documentation et relecture.
+- **DeepSeek V4 Flash** — IA locale : rédaction du cahier des charges et
+  développement initial.
 
 ## Dépôt
 

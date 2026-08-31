@@ -60,6 +60,8 @@ guide).
 - [QA test checklist](#qa-test-checklist)
 - [Known limitations](#known-limitations)
 - [Roadmap](#roadmap)
+- [Role of AI in this project](#role-of-ai-in-this-project)
+- [Contributors](#contributors)
 - [Repository](#repository)
 - [References](#references)
 
@@ -364,6 +366,34 @@ palette.
   (`usbspd`), diagnostics (`diag`).
 - **M4** Final packaging/icons, continuous integration, cross-platform
   validation.
+
+## Role of AI in this project
+
+This project grew out of a **specification** written and developed by Eddy in
+collaboration with a **local AI** (DeepSeek V4 Flash). The first major hurdle
+was understanding how to access the EverDrive's **SD card reader**: despite
+extensive exchanges with **Claude** (Anthropic), neither of these two AIs
+managed to read the SD card correctly.
+
+It ultimately took **reverse engineering of the `turbolink.exe` executable**,
+carried out with the help of **ChatGPT**, to unblock the problem: the
+disassembly revealed the protocol's missing pieces (notably the `u16` argument
+expected by `CMD_F_DIR_RD`, see `docs/PROTOCOL.md`), making proper **SD card
+read/write** interrogation possible.
+
+AI therefore played a decisive and complementary role: help with architecture
+and development, protocol exploration and analysis of the proprietary binary —
+each one bringing a different perspective on a problem none of them would have
+solved on their own.
+
+## Contributors
+
+- **Eddy (beddy70)** — author: specification, development and reverse
+  engineering.
+- **Cline** — contributing AI assistant: code generation and refactoring,
+  documentation and review.
+- **DeepSeek V4 Flash** — local AI: specification drafting and initial
+  development.
 
 ## Repository
 
