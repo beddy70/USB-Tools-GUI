@@ -1,5 +1,7 @@
 # Guide utilisateur — Turbo Everdrive USB Tools GUI
 
+*[English version](GUIDE_UTILISATEUR.en.md)*
+
 Ce guide s'adresse à l'utilisateur de l'application, pas au développeur (pour
 l'architecture technique, le protocole ou la compilation, voir
 [`README.md`](../README.md), [`docs/PROTOCOL.md`](PROTOCOL.md) et

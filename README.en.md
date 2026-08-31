@@ -42,7 +42,7 @@ in the repository under [`downloads/`](downloads)):
 
 Each archive ships its own `README.txt` with installation instructions
 (including, on macOS, how to lift the Gatekeeper block on an unsigned
-binary) and [`GUIDE_UTILISATEUR.md`](docs/GUIDE_UTILISATEUR.md) (French user
+binary) and [`GUIDE_UTILISATEUR.en.md`](docs/GUIDE_UTILISATEUR.en.md) (user
 guide).
 
 ---
@@ -55,7 +55,7 @@ guide).
 - [Requirements](#requirements)
 - [Build & run](#build--run)
 - [Usage](#usage)
-- [Full user guide (French)](docs/GUIDE_UTILISATEUR.md)
+- [Full user guide](docs/GUIDE_UTILISATEUR.en.md)
 - [Hardware verification](#hardware-verification)
 - [QA test checklist](#qa-test-checklist)
 - [Known limitations](#known-limitations)
@@ -207,7 +207,7 @@ cartridge) and resets its state per session. Useful commands:
 
 *Quick summary below — for a step-by-step guide aimed at the end user
 (installation, each tab in detail, common troubleshooting), see
-[`docs/GUIDE_UTILISATEUR.md`](docs/GUIDE_UTILISATEUR.md) (French).*
+[`docs/GUIDE_UTILISATEUR.en.md`](docs/GUIDE_UTILISATEUR.en.md).*
 
 1. Plug the cartridge in via USB and display the cartridge's **OS menu**.
 2. Launch the app then click **Connect** (the port is auto-detected).

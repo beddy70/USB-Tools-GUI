@@ -1,0 +1,240 @@
+# User Guide — Turbo Everdrive USB Tools GUI
+
+*[Version française](GUIDE_UTILISATEUR.md)*
+
+This guide is aimed at the app's user, not the developer (for the technical
+architecture, the protocol, or building it, see [`README.md`](../README.md)
+/ [`README.en.md`](../README.en.md), [`docs/PROTOCOL.md`](PROTOCOL.md) and
+[`docs/ARCHITECTURE.md`](ARCHITECTURE.md)).
+
+## Contents
+
+1. [What you need](#what-you-need)
+2. [Installation (Windows)](#installation-windows)
+3. [First launch and connection](#first-launch-and-connection)
+4. [GAMES tab](#games-tab)
+5. [SD Card tab](#sd-card-tab)
+6. [Play tab](#play-tab)
+7. [Memory tab](#memory-tab)
+8. [Sprites tab](#sprites-tab)
+9. [Troubleshooting](#troubleshooting)
+10. [QA test checklist](#qa-test-checklist)
+11. [Frequently asked questions](#frequently-asked-questions)
+
+## What you need
+
+- A **Turbo EverDrive Pro** or **Core** cartridge, plugged into the computer
+  via USB (a **data** cable, not a charge-only one).
+- A **PC-Engine / TurboGrafx-16** console powered on, with the cartridge
+  plugged in and **the cartridge's menu displayed on screen**. This
+  matters: the cartridge's USB link only responds while its menu is active
+  — not while a game is running (see [Troubleshooting](#troubleshooting)).
+- Windows 10/11 64-bit (the WebView2 Runtime is usually already installed;
+  otherwise, Windows will offer to install it).
+
+## Installation (Windows)
+
+1. Unzip `edlink-app-win64.zip` into a folder of your choice.
+2. Keep all the files together in that same folder (`edlink-app.exe` needs
+   `WebView2Loader.dll` next to it).
+3. Double-click `edlink-app.exe`.
+
+The folder also contains:
+- `edlink-cli.exe` — the command-line version (see `READ-ME.txt` for its
+  commands), useful for advanced troubleshooting.
+- `qa-checklist.html` — a test checklist to open in a browser, see
+  [QA test checklist](#qa-test-checklist).
+
+## First launch and connection
+
+1. Open the application. The **🔌 Connection** tab is shown.
+2. Choose the serial port from the dropdown list (EverDrive cartridges
+   usually show up automatically), or leave it on automatic mode.
+3. Click **Connect**.
+4. Once connected, the banner in the top right turns green ("Connected")
+   and an info card shows the cartridge's name, version, etc.
+
+If nothing connects, see [Troubleshooting](#troubleshooting).
+
+## GAMES tab
+
+The **🕹️ GAMES** tab is the fastest way to find and launch a game: a list
+of colorful arcade-cabinet-style categories, then a mosaic of boxart.
+
+### Organizing your games
+
+The tab expects this folder tree on the SD card:
+
+```
+sd:/GAMES
+ ├─ Action
+ │   ├─ Bloody Wolf (U).pce
+ │   └─ ...
+ ├─ RPG
+ │   └─ ...
+ └─ Platformer
+     └─ ...
+```
+
+Each **top-level subfolder** of `sd:/GAMES` becomes a category; the ROM
+files (`.pce`, `.sgx`, `.rom`, `.bin`) it contains show up in its mosaic. A
+file placed directly in `sd:/GAMES`, without going through a subfolder,
+doesn't show up in this tab (use the **SD Card** tab to see/move it).
+
+The base folder doesn't have to be `sd:/GAMES`: click **⚙ Change games
+folder** at the top of the tab to point to another path (e.g. `sd:/ROMS`).
+This choice is remembered on this computer.
+
+### Navigating
+
+- Click a **category** → its mosaic of games is shown, with each game's
+  boxart when found.
+- **← Categories** at the top of the mosaic goes back to the list.
+- Click a **game** → its detail sheet opens: file size, path on the card,
+  title screen and in-game snapshot (when found — they alternate
+  automatically every 2 seconds), **▶ Play** and **⬇ Download** buttons.
+- **Right-click** a mosaic thumbnail opens the same context menu as in the
+  SD Card tab (Play, Rename, Download, Delete).
+
+### Boxart
+
+Boxart comes from the community [Libretro
+Thumbnails](https://github.com/libretro-thumbnails) database: this needs an
+internet connection (only to download images — never to talk to the
+cartridge), and results are cached on the computer so the network is never
+hit twice for a game already seen.
+
+The match between the ROM file's name and the name used by that database
+isn't always exact (different naming conventions): when it's only an
+**approximate** match, a percentage badge appears on the thumbnail and in
+the detail sheet. Below a certain similarity threshold, or if no match is
+found, the thumbnail stays without boxart.
+
+**To fix missing or wrong boxart**: hover the thumbnail in the mosaic,
+click the small **⚙** button that appears, and enter the exact title as it
+appears in the Libretro database (without the extension). It's remembered
+for next time.
+
+## SD Card tab
+
+The **📤 SD Card** tab is a classic file explorer.
+
+- **⬆** goes up to the parent folder, **⟳** refreshes, **▦ / ☰** switch
+  between icon view and list view.
+- **📂 Import…** sends a file from your computer to the currently displayed
+  folder.
+- **Drag and drop** one or more files directly into the window to send
+  them.
+- **Double-click** a ROM file to launch it directly on the console;
+  double-click a folder to open it.
+- **Right-click** a file opens a menu:
+  - **▶ Play** — deploys and launches the ROM;
+  - **✏️ Rename…** — note: there is no native rename in the cartridge's
+    protocol: this operation fully copies the file under the new name then
+    deletes the original (a bit slower than a real rename on a large ROM);
+  - **⬇ Download…** — saves the file to your computer;
+  - **🗑 Delete** — removes the file from the card (asks for confirmation).
+
+## Play tab
+
+A simple shortcut: **Choose and launch…** opens a file picker on your
+computer, sends the chosen ROM to the SD card then launches it — in a
+single step, without needing it to already be on the card.
+
+**🔄 Reset console** restarts the console (useful if a game crashes or to
+get back to the cartridge's menu).
+
+**Capture screen** shows an image of the cartridge's menu (not of a running
+game — see [Troubleshooting](#troubleshooting)).
+
+> ⚠️ **Screen capture, the Memory tab and the Sprites tab are not yet
+> stable on real hardware**: these features read the console's bus or
+> video memory while it's running, which can **crash the running game** on
+> some cartridges (return to the menu, or even a freeze). Use them
+> carefully during an ongoing game, and don't hesitate to reset the console
+> if needed.
+
+## Memory tab
+
+Read-only viewer of the cartridge's memory.
+
+- **RAM**: on real hardware, every read briefly interrupts the console (it
+  shares the same bus) — so the tab switches to a cautious mode: small
+  blocks, only on demand via **Refresh**, never continuous automatic
+  reading.
+- **VRAM / CRAM**: a snapshot taken via the cartridge's menu (like the
+  screen capture) — so **the cartridge's menu must be displayed**, not a
+  running game.
+
+## Sprites tab
+
+Sheet of tiles decoded from VRAM (requires, as above, that the cartridge's
+menu be displayed).
+
+- Choose the **cell size**: 8×8 (background only) or one of the VDC's 6
+  real sprite sizes (16×16 to 32×64), the **palette** and the **zoom**.
+- Click a cell to see its VRAM address and pattern number.
+- **Drag** to select a rectangle of cells; the PNG export then only saves
+  that selection.
+- **🔒 Lock** crops the display to just the selection (the rest of VRAM
+  disappears) — handy for tracking the same sprite across several captures
+  (e.g. an animation): the selection stays on the same area even if you
+  change the cell size or the number of columns.
+- **✕ Selection** (or the <kbd>Esc</kbd> key) clears the selection and
+  returns to the full sheet.
+
+## Troubleshooting
+
+**Nothing connects / the port doesn't show up**
+- Check that the console is on and that **the cartridge's menu is properly
+  displayed on screen**.
+- Check that the USB cable carries data (not a "charge-only" cable).
+- Retry **Connect** — simply unplugging and replugging the cable is
+  sometimes enough to make the port reappear.
+
+**"Connection lost" message during use**
+- A communication error made the port unusable for the rest of the session
+  (rare, observed on some Windows configurations). The app detects it and
+  automatically switches back to "Disconnected" rather than repeating the
+  same error in a loop: just click **Connect** again.
+
+**"Capture screen" or the Memory tab (VRAM/CRAM) fail**
+- These features read video memory **via the cartridge's menu**: they only
+  work while that menu is displayed on screen, never while a game is
+  running. Go back to the cartridge's menu (the **Reset console** button if
+  needed) then try again.
+
+**The SD Card tab's listing fails (timeout)**
+- Protocol still being validated on some cartridges — see
+  [`docs/PROTOCOL.md`](PROTOCOL.md) for the exact status and how to send us
+  a diagnostic trace if the problem persists for you.
+
+**No boxart shows up in the GAMES tab**
+- Check the computer's internet connection (needed only to download
+  images, not to talk to the cartridge).
+- The game may simply not have a reliable enough match in the database —
+  associate it manually via the **⚙** button on its thumbnail (see [GAMES
+  tab](#games-tab)).
+
+## QA test checklist
+
+`qa-checklist.html` (shipped next to the application) is a standalone
+validation form to open in a browser: no installation, no data sent
+anywhere. It lists the points to check after an update (connection,
+transfers, memory reading…), with a status and a screenshot per row, and
+generates a Markdown report ready to share.
+
+## Frequently asked questions
+
+**Do I need to keep the console powered on the whole time?**
+Yes, as long as you're using the application — the cartridge's USB link
+depends on the console being powered.
+
+**Can I use the application without an internet connection?**
+Yes, for everything except the GAMES tab's boxart (see above): connecting
+to the cartridge, transferring files, screen capture, memory and sprites
+all work entirely offline.
+
+**Where are the games folder and boxart mappings stored?**
+In the local storage of the browser embedded in the application, specific
+to this computer — it doesn't travel with the SD card or with an export.
