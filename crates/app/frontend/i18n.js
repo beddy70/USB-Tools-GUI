@@ -81,7 +81,8 @@ fr: {
   "games.thumbSourceLocal": "💾 Local (DB_Thumbnails)",
   "games.thumbLocalDirPick": "Choisir le dossier DB_Thumbnails…",
   "games.thumbLocalDirTitle": "Dossier local : {dir} — cliquer pour changer",
-  "games.thumbLocalDirHint": "⚠ Mode local sélectionné : choisissez le dossier DB_Thumbnails (bouton 📁) pour afficher les pochettes.",
+  "games.thumbLocalDirHint": "⚠ Mode local : choisissez (bouton 📁) un dossier contenant directement Named_Boxarts/, Named_Snaps/ et Named_Titles/ — sans sous-dossier intermédiaire (pas de dossier par système comme en mode réseau).",
+  "games.thumbLocalDirActiveInfo": "📁 Dossier local : {dir} — doit contenir directement Named_Boxarts/, Named_Snaps/, Named_Titles/.",
 
   "sd.explorerTitle": "Explorateur de carte SD",
   "sd.parentFolderTitle": "Dossier parent",
@@ -318,7 +319,8 @@ en: {
   "games.thumbSourceLocal": "💾 Local (DB_Thumbnails)",
   "games.thumbLocalDirPick": "Choose the DB_Thumbnails folder…",
   "games.thumbLocalDirTitle": "Local folder: {dir} — click to change",
-  "games.thumbLocalDirHint": "⚠ Local mode selected: choose the DB_Thumbnails folder (📁 button) to display boxart.",
+  "games.thumbLocalDirHint": "⚠ Local mode: choose (📁 button) a folder that directly contains Named_Boxarts/, Named_Snaps/ and Named_Titles/ — no intermediate subfolder (no per-system folder like in network mode).",
+  "games.thumbLocalDirActiveInfo": "📁 Local folder: {dir} — must directly contain Named_Boxarts/, Named_Snaps/, Named_Titles/.",
 
   "sd.explorerTitle": "SD card explorer",
   "sd.parentFolderTitle": "Parent folder",
@@ -555,7 +557,8 @@ de: {
   "games.thumbSourceLocal": "💾 Lokal (DB_Thumbnails)",
   "games.thumbLocalDirPick": "DB_Thumbnails-Ordner wählen…",
   "games.thumbLocalDirTitle": "Lokaler Ordner: {dir} — klicken zum Ändern",
-  "games.thumbLocalDirHint": "⚠ Lokaler Modus gewählt: Wählen Sie den DB_Thumbnails-Ordner (Schaltfläche 📁), um Cover anzuzeigen.",
+  "games.thumbLocalDirHint": "⚠ Lokaler Modus: Wählen Sie (Schaltfläche 📁) einen Ordner, der direkt Named_Boxarts/, Named_Snaps/ und Named_Titles/ enthält — ohne Zwischenordner (kein Ordner pro System wie im Netzwerkmodus).",
+  "games.thumbLocalDirActiveInfo": "📁 Lokaler Ordner: {dir} — muss direkt Named_Boxarts/, Named_Snaps/, Named_Titles/ enthalten.",
 
   "sd.explorerTitle": "SD-Karten-Explorer",
   "sd.parentFolderTitle": "Übergeordneter Ordner",
@@ -792,7 +795,8 @@ es: {
   "games.thumbSourceLocal": "💾 Local (DB_Thumbnails)",
   "games.thumbLocalDirPick": "Elegir la carpeta DB_Thumbnails…",
   "games.thumbLocalDirTitle": "Carpeta local: {dir} — clic para cambiar",
-  "games.thumbLocalDirHint": "⚠ Modo local seleccionado: elija la carpeta DB_Thumbnails (botón 📁) para mostrar las carátulas.",
+  "games.thumbLocalDirHint": "⚠ Modo local: elija (botón 📁) una carpeta que contenga directamente Named_Boxarts/, Named_Snaps/ y Named_Titles/ — sin subcarpeta intermedia (sin carpeta por sistema como en el modo red).",
+  "games.thumbLocalDirActiveInfo": "📁 Carpeta local: {dir} — debe contener directamente Named_Boxarts/, Named_Snaps/, Named_Titles/.",
 
   "sd.explorerTitle": "Explorador de tarjeta SD",
   "sd.parentFolderTitle": "Carpeta superior",

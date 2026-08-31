@@ -676,10 +676,17 @@ async function renderGamesBrowser() {
   bar.appendChild(actions);
   container.appendChild(bar);
 
-  if (thumbSource === "local" && !thumbLocalDir) {
+  if (thumbSource === "local") {
     const hint = document.createElement("div");
-    hint.className = "games-hint";
-    hint.textContent = t("games.thumbLocalDirHint");
+    // Avertissement tant qu'aucun dossier n'est choisi (rien n'est cherché) ;
+    // simple rappel discret de la structure attendue une fois un dossier
+    // choisi — la confusion initiale ("aucune pochette trouvée") venait de
+    // ce que cette structure n'était expliquée que dans le guide utilisateur,
+    // pas dans l'app elle-même.
+    hint.className = "games-hint" + (thumbLocalDir ? " info" : "");
+    hint.textContent = thumbLocalDir
+      ? t("games.thumbLocalDirActiveInfo", { dir: thumbLocalDir })
+      : t("games.thumbLocalDirHint");
     container.appendChild(hint);
   }
 

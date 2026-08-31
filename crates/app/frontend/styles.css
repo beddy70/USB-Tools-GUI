@@ -203,6 +203,7 @@ button.btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; box-s
   font-size: 12px; cursor: pointer; }
 .thumb-source-select:hover { border-color: var(--cyan); }
 .games-hint { font-size: 11.5px; color: var(--yellow); margin: -8px 0 12px; }
+.games-hint.info { color: var(--muted); font-family: var(--mono); }
 
 /* Catégories : une rangée colorée par dossier, texte stylé (28px — réduit de
    30% depuis 40px). */
