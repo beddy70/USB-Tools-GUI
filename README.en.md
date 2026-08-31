@@ -212,8 +212,25 @@ cartridge) and resets its state per session. Useful commands:
 1. Plug the cartridge in via USB and display the cartridge's **OS menu**.
 2. Launch the app then click **Connect** (the port is auto-detected).
 3. **GAMES** tab: base folder `sd:/GAMES` by default (⚙ to change it) —
-   categories = its subfolders; click a category → mosaic of ROMs with
-   boxart; click a game → detail sheet (Play/Download).
+   categories = its subfolders (plus virtual categories **GAMES**, if the
+   root has no subfolder, and **Favorites**, always present); click a
+   category → mosaic of ROMs with boxart; click a game → detail sheet
+   (♡/♥ favorite, Play, Download).
+   - **Configuring the boxart source** (dropdown at the top of the tab):
+     - **🌐 Network (Libretro)** — the default, no setup needed (just an
+       internet connection).
+     - **💾 Local (DB_Thumbnails)** — click the **📁** button that appears
+       next to the dropdown, then choose a folder that **directly**
+       contains (no intermediate subfolder) images in the
+       libretro-thumbnails format:
+       ```
+       DB_Thumbnails/
+        ├─ Named_Boxarts/<Title> (Region).png
+        ├─ Named_Snaps/<Title> (Region).png
+        └─ Named_Titles/<Title> (Region).png
+       ```
+       Until a folder is chosen, a banner reminds you and no boxart is
+       looked up.
 4. **SD Card** tab: browse the card, drop files to upload them (progress
    bar), double-click to download, **right-click** a file for
    Play/Rename/Download/Delete.

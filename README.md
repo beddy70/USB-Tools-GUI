@@ -211,9 +211,27 @@ final (installation, chaque onglet en détail, dépannage courant), voir
 1. Branchez la cartouche en USB et affichez le **menu OS** de la carte.
 2. Lancez l'app puis **Connecter** (le port se détecte automatiquement).
 3. Onglet **GAMES** : dossier de base `sd:/GAMES` par défaut (⚙ pour le
-   changer) — catégories = ses sous-dossiers ; clic sur une catégorie →
-   mosaïque des ROM avec jaquette ; clic sur un jeu → fiche détaillée
-   (Jouer/Télécharger).
+   changer) — catégories = ses sous-dossiers (+ catégories virtuelles
+   **GAMES**, si la racine n'a aucun sous-dossier, et **Favoris**,
+   toujours présente) ; clic sur une catégorie → mosaïque des ROM avec
+   jaquette ; clic sur un jeu → fiche détaillée (♡/♥ favoris, Jouer,
+   Télécharger).
+   - **Configurer la source des jaquettes** (menu déroulant en haut de
+     l'onglet) :
+     - **🌐 Réseau (Libretro)** — par défaut, aucune configuration requise
+       (juste une connexion Internet).
+     - **💾 Local (DB_Thumbnails)** — cliquez le bouton **📁** qui apparaît
+       à côté du menu déroulant, puis choisissez un dossier contenant
+       **directement** (sans sous-dossier intermédiaire) les images au
+       format libretro-thumbnails :
+       ```
+       DB_Thumbnails/
+        ├─ Named_Boxarts/<Titre> (Région).png
+        ├─ Named_Snaps/<Titre> (Région).png
+        └─ Named_Titles/<Titre> (Région).png
+       ```
+       Tant qu'aucun dossier n'est choisi, un bandeau le rappelle et
+       aucune pochette n'est cherchée.
 4. Onglet **Carte SD** : parcourez la carte, déposez des fichiers pour les
    envoyer (barre de progression), double‑cliquez pour télécharger, **clic
    droit** sur un fichier pour Jouer/Renommer/Télécharger/Effacer.
