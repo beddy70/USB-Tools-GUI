@@ -41,6 +41,9 @@ const APP_JS: &str = include_str!("../mobile/app.js");
 const APP_CSS: &str = include_str!("../mobile/style.css");
 
 const ROM_EXTS: [&str; 4] = ["pce", "sgx", "rom", "bin"];
+/// Clé de catégorie réservée pour les favoris (jamais un vrai nom de
+/// sous-dossier SD, qui ne peut pas contenir de tels caractères en pratique).
+const FAVORITES_KEY: &str = "__FAVORITES__";
 
 /// Réglages du bureau reflétés ici pour que le téléphone voie la même chose
 /// (dossier de jeux, source de pochette) — synchronisés depuis main.js.
@@ -182,6 +185,15 @@ fn build_response(app: &AppHandle, req: &mut tiny_http::Request) -> Response<Cur
                 Err(e) => error_response(&e),
             }
         }
+        (Method::Get, "/api/favorites") => json_response(&crate::favorites::list(app)),
+        (Method::Post, "/api/favorites/toggle") => {
+            let mut body = String::new();
+            let _ = req.as_reader().read_to_string(&mut body);
+            match api_favorites_toggle(app, &body) {
+                Ok(v) => json_response(&v),
+                Err(e) => error_response(&e),
+            }
+        }
         _ => not_found(),
     }
 }
@@ -250,7 +262,10 @@ fn api_categories(app: &AppHandle) -> Result<Vec<CategoryResp>, String> {
     let mut dirs: Vec<_> = entries.into_iter().filter(|e| e.is_dir).collect();
     dirs.sort_by(|a, b| a.name.cmp(&b.name));
 
-    let mut out = Vec::new();
+    // Favoris toujours en tête (comme sur le bureau — voir VIRTUAL_FAVORITES_
+    // CATEGORY dans main.js), GAMES virtuelle seulement si aucun vrai
+    // sous-dossier catégorie n'existe.
+    let mut out = vec![CategoryResp { key: FAVORITES_KEY.into(), label: "Favoris".into() }];
     if dirs.is_empty() {
         out.push(CategoryResp { key: String::new(), label: "GAMES".into() });
     }
@@ -268,6 +283,12 @@ struct GameResp {
 }
 
 fn api_games(app: &AppHandle, category: &str) -> Result<Vec<GameResp>, String> {
+    if category == FAVORITES_KEY {
+        let mut favs = crate::favorites::list(app);
+        favs.sort_by(|a, b| a.name.cmp(&b.name));
+        return Ok(favs.into_iter().map(|f| GameResp { name: f.name, size: f.size, path: f.full }).collect());
+    }
+
     let state = app.state::<AppState>();
     let games_root = state.mobile.settings.lock().unwrap().games_root.clone();
     let cat_path = if category.is_empty() { games_root } else { join_sd(&games_root, category) };
@@ -280,6 +301,18 @@ fn api_games(app: &AppHandle, category: &str) -> Result<Vec<GameResp>, String> {
         .into_iter()
         .map(|e| GameResp { path: join_sd(&cat_path, &e.name), name: e.name, size: e.size })
         .collect())
+}
+
+#[derive(Deserialize)]
+struct FavToggleReq {
+    full: String,
+    name: String,
+    size: u32,
+}
+
+fn api_favorites_toggle(app: &AppHandle, body: &str) -> Result<Vec<crate::favorites::Favorite>, String> {
+    let req: FavToggleReq = serde_json::from_str(body).map_err(|e| format!("Requête invalide : {e}"))?;
+    Ok(crate::favorites::toggle(app, req.full, req.name, req.size))
 }
 
 fn api_cover(app: &AppHandle, qs: &HashMap<String, String>) -> Result<Vec<u8>, ()> {

@@ -175,13 +175,17 @@ connecté au **même réseau Wi-Fi** que l'ordinateur.
    `http://192.168.1.23:4590`) apparaissent.
 2. Sur le téléphone, scannez le QR code avec l'appareil photo, ou tapez
    l'adresse dans un navigateur.
-3. La page mobile affiche les mêmes catégories que l'ordinateur (y compris
-   la catégorie virtuelle GAMES si le dossier de base n'a pas de
-   sous-dossier — voir [Onglet GAMES](#onglet-games) — mais pas les
-   Favoris, voir plus bas) et les mêmes pochettes (réseau ou locale, selon
-   la source choisie sur l'ordinateur). Toucher un jeu propose de le
-   lancer directement sur la console.
-4. **⏹ Arrêter** ferme le serveur — plus personne ne peut y accéder.
+3. La page mobile affiche les mêmes catégories que l'ordinateur, y compris
+   les catégories virtuelles **GAMES** (racine sans sous-dossier — voir
+   [Onglet GAMES](#onglet-games)) et **❤️ Favoris**, et les mêmes pochettes
+   (réseau ou locale, selon la source choisie sur l'ordinateur). Toucher un
+   jeu ouvre sa fiche détaillée (jaquette, écran-titre/capture en jeu
+   alternés, bouton ♡/♥) avant de le lancer.
+4. Le bouton **♡/♥** de la fiche détaillée ajoute ou retire ce jeu des
+   favoris — **partagé en temps réel avec l'ordinateur** : un jeu favorisé
+   depuis le téléphone apparaît immédiatement dans la catégorie Favoris du
+   bureau, et inversement.
+5. **⏹ Arrêter** ferme le serveur — plus personne ne peut y accéder.
 
 > ⚠️ **Sans authentification.** Ce serveur est pensé pour un réseau Wi-Fi
 > domestique de confiance : n'importe qui sur ce réseau peut y accéder tant
@@ -190,11 +194,11 @@ connecté au **même réseau Wi-Fi** que l'ordinateur.
 > l'utilisez pas.
 
 **Limites de la version mobile** (volontairement plus simple que le
-bureau) : pas de catégorie Favoris (liste stockée dans le navigateur de
-l'ordinateur, non partagée), pas de changement de dossier de jeux ni de
-source de pochette depuis le téléphone — ces réglages restent ceux
-configurés sur l'ordinateur. La connexion à la carte (USB) se fait
-toujours depuis l'ordinateur, jamais depuis le téléphone.
+bureau) : pas de changement de dossier de jeux ni de source de pochette
+depuis le téléphone — ces réglages restent ceux configurés sur
+l'ordinateur ; pas de bouton ⚙ pour corriger manuellement une jaquette
+non trouvée. La connexion à la carte (USB) se fait toujours depuis
+l'ordinateur, jamais depuis le téléphone.
 
 ## Onglet Carte SD
 

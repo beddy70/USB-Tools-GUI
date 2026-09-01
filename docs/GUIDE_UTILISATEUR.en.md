@@ -166,12 +166,17 @@ as the computer.
    `http://192.168.1.23:4590`) appear.
 2. On the phone, scan the QR code with the camera, or type the address into
    a browser.
-3. The mobile page shows the same categories as the computer (including
-   the virtual GAMES category if the base folder has no subfolder — see
-   [GAMES tab](#games-tab) — but not Favorites, see below) and the same
-   boxart (network or local, depending on the source chosen on the
-   computer). Tapping a game offers to launch it directly on the console.
-4. **⏹ Stop** closes the server — no one can access it anymore.
+3. The mobile page shows the same categories as the computer, including the
+   virtual **GAMES** (root with no subfolder — see [GAMES tab](#games-tab))
+   and **❤️ Favorites** categories, and the same boxart (network or local,
+   depending on the source chosen on the computer). Tapping a game opens
+   its detail sheet (boxart, title screen/in-game snapshot alternating, a
+   ♡/♥ button) before launching it.
+4. The **♡/♥** button on the detail sheet adds or removes that game from
+   favorites — **shared live with the computer**: a game favorited from
+   the phone shows up immediately in the desktop's Favorites category, and
+   vice versa.
+5. **⏹ Stop** closes the server — no one can access it anymore.
 
 > ⚠️ **No authentication.** This server is meant for a trusted home Wi-Fi
 > network: anyone on that network can access it while it's running, and it
@@ -179,10 +184,10 @@ as the computer.
 > router). Turn it off when you're not using it.
 
 **Limits of the mobile version** (intentionally simpler than the desktop):
-no Favorites category (list stored in the computer's browser, not shared),
 no changing the games folder or boxart source from the phone — those
-settings stay whatever is configured on the computer. Connecting to the
-cartridge (USB) always happens from the computer, never from the phone.
+settings stay whatever is configured on the computer; no ⚙ button to
+manually fix a boxart that wasn't found. Connecting to the cartridge (USB)
+always happens from the computer, never from the phone.
 
 ## SD Card tab
 

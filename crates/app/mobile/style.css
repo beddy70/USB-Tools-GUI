@@ -95,8 +95,37 @@ html, body {
   background: var(--panel); border: 1px solid var(--border); border-radius: 14px;
   padding: 20px; width: 100%; max-width: 340px;
 }
-.modal-box p { margin: 0 0 18px; font-size: 15px; line-height: 1.5; }
-.modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+/* Fiche de détail d'un jeu */
+.detail-box { position: relative; max-width: 380px; text-align: center; }
+.icon-btn {
+  position: absolute; top: 8px; background: transparent; border: none;
+  color: var(--muted); font-size: 20px; padding: 8px; line-height: 1; cursor: pointer;
+}
+.close-btn { right: 4px; }
+.fav-btn { left: 4px; color: var(--muted); }
+.fav-btn.active { color: var(--red); }
+.detail-boxart-wrap {
+  width: 140px; height: 140px; margin: 8px auto 12px; border-radius: 12px;
+  border: 1px solid var(--border); background: var(--panel-2);
+  display: flex; align-items: center; justify-content: center; overflow: hidden;
+}
+.detail-boxart-wrap img { width: 100%; height: 100%; object-fit: contain; }
+.detail-boxart-wrap img[hidden] { display: none; }
+.detail-boxart-ph { font-size: 44px; opacity: 0.35; }
+#detail-title { font-size: 16px; margin: 0 0 4px; word-break: break-word; }
+.detail-meta { font-size: 12.5px; color: var(--muted); margin: 0 0 14px; }
+.detail-snap-wrap {
+  position: relative; border-radius: 8px; overflow: hidden; margin-bottom: 16px;
+  border: 1px solid var(--border); background: var(--bg);
+}
+.detail-snap-wrap[hidden] { display: none; }
+.detail-snap-wrap img { width: 100%; height: auto; display: block; }
+.detail-snap-label {
+  position: absolute; top: 6px; left: 6px; font-size: 10px; font-weight: 700;
+  letter-spacing: .3px; text-transform: uppercase; color: #fff;
+  padding: 3px 7px; border-radius: 5px; background: rgba(0, 0, 0, 0.6);
+}
+.detail-launch { width: 100%; }
 
 .toast {
   position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);

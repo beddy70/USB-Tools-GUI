@@ -15,14 +15,23 @@
     <p class="hint">Chargement…</p>
   </main>
 
-  <!-- Confirmation de lancement (remplace confirm(), pas fiable sur mobile) -->
-  <div class="modal-backdrop" id="modal" hidden>
-    <div class="modal-box">
-      <p id="modal-msg"></p>
-      <div class="modal-actions">
-        <button class="btn ghost" id="modal-cancel">Annuler</button>
-        <button class="btn primary" id="modal-ok">▶ Lancer</button>
+  <!-- Fiche de détail d'un jeu (tap sur une vignette de la mosaïque) : sert
+       aussi d'écran de confirmation avant lancement (bouton ▶ Lancer). -->
+  <div class="modal-backdrop" id="detail-modal" hidden>
+    <div class="modal-box detail-box">
+      <button class="icon-btn close-btn" id="detail-close" title="Fermer">✕</button>
+      <button class="icon-btn fav-btn" id="detail-fav" title="Ajouter aux favoris">♡</button>
+      <div class="detail-boxart-wrap">
+        <img id="detail-boxart" alt="" />
+        <div class="detail-boxart-ph" id="detail-boxart-ph">🎮</div>
       </div>
+      <h2 id="detail-title"></h2>
+      <p class="detail-meta" id="detail-meta"></p>
+      <div class="detail-snap-wrap" id="detail-snap-wrap" hidden>
+        <img id="detail-snap" alt="" />
+        <span class="detail-snap-label" id="detail-snap-label"></span>
+      </div>
+      <button class="btn primary detail-launch" id="detail-launch">▶ Lancer</button>
     </div>
   </div>
 

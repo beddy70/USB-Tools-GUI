@@ -3,6 +3,7 @@
 //! Expose au frontend web des commandes de connexion et d'opérations sur la
 //! carte (infos, transfert fichiers, lancement, reset, capture, memrd).
 
+mod favorites;
 mod mobile_server;
 mod qr;
 mod thumbnails;
@@ -23,6 +24,8 @@ struct AppState {
     /// Serveur web mobile (onglet GAMES accessible depuis un smartphone) —
     /// voir `mobile_server.rs`.
     mobile: mobile_server::MobileState,
+    /// Jeux favoris, partagés bureau/mobile — voir `favorites.rs`.
+    favorites: favorites::FavoritesState,
 }
 
 /// Résumé retourné après connexion.
@@ -105,6 +108,7 @@ pub fn run() {
             dropped: Mutex::new(Vec::new()),
             screen_snap: Mutex::new(None),
             mobile: mobile_server::MobileState::default(),
+            favorites: favorites::FavoritesState::default(),
         })
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::DragDrop(tauri::DragDropEvent::Drop { paths, .. }) = event
@@ -146,6 +150,8 @@ pub fn run() {
             mobile_server_status,
             sync_mobile_settings,
             get_server_qr,
+            get_favorites,
+            toggle_favorite,
             get_dropped,
             clear_dropped,
             get_build_info,
@@ -434,9 +440,14 @@ async fn fetch_game_media(
 
 /// Supprime un fichier (ou dossier vide) de la carte SD.
 #[tauri::command]
-fn delete_sd(state: State<'_, AppState>, path: String) -> Result<String, String> {
+fn delete_sd(app: tauri::AppHandle, state: State<'_, AppState>, path: String) -> Result<String, String> {
     let dev = normalize_sd_path(&path);
-    with_ted(&state, |t| t.delete_file(&dev)).map(|_| format!("{dev} effacé"))
+    let res = with_ted(&state, |t| t.delete_file(&dev)).map(|_| format!("{dev} effacé"));
+    if res.is_ok() {
+        // Évite un favori fantôme sur un fichier qui n'existe plus.
+        favorites::forget(&app, &dev);
+    }
+    res
 }
 
 /// Renomme un fichier de la carte SD (reste dans le même dossier).
@@ -445,11 +456,15 @@ fn delete_sd(state: State<'_, AppState>, path: String) -> Result<String, String>
 /// Tauri attend `newName` (camelCase) côté JS au lieu de `new_name`, et
 /// l'appel échoue silencieusement (argument manquant).
 #[tauri::command(rename_all = "snake_case")]
-fn rename_sd(state: State<'_, AppState>, path: String, new_name: String) -> Result<String, String> {
+fn rename_sd(app: tauri::AppHandle, state: State<'_, AppState>, path: String, new_name: String) -> Result<String, String> {
     let old = normalize_sd_path(&path);
     let parent = old.rsplit_once('/').map(|(p, _)| p).unwrap_or("sd:");
     let new_path = format!("{parent}/{new_name}");
-    with_ted(&state, |t| t.rename_file(&old, &new_path)).map(|_| new_path)
+    let res = with_ted(&state, |t| t.rename_file(&old, &new_path)).map(|_| new_path.clone());
+    if res.is_ok() {
+        favorites::rename(&app, &old, new_path, new_name);
+    }
+    res
 }
 
 /// Déploie et lance un jeu (chemin local ou `sd:...`).
@@ -669,6 +684,21 @@ fn sync_mobile_settings(
 #[tauri::command]
 fn get_server_qr(data: String) -> Result<String, String> {
     qr::png_for(&data).map(|bytes| b64(&bytes))
+}
+
+/// Liste des jeux favoris (voir `favorites.rs`) — état partagé avec le
+/// serveur mobile, pas de simple stockage local du navigateur : un ajout/
+/// retrait depuis le téléphone doit être vu immédiatement par le bureau
+/// et vice-versa.
+#[tauri::command]
+fn get_favorites(app: tauri::AppHandle) -> Vec<favorites::Favorite> {
+    favorites::list(&app)
+}
+
+/// Bascule `full` dans/hors des favoris (♡ ↔ ♥) et renvoie la liste à jour.
+#[tauri::command(rename_all = "snake_case")]
+fn toggle_favorite(app: tauri::AppHandle, full: String, name: String, size: u32) -> Vec<favorites::Favorite> {
+    favorites::toggle(&app, full, name, size)
 }
 
 /// Ouvre un sélecteur de destination de fichier.

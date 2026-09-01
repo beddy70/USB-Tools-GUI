@@ -582,41 +582,20 @@ function syncMobileSettings() {
 
 // Favoris : jeux marqués via le ♡/♥ de la fiche de détail, indépendamment de
 // leur catégorie/dossier — accessibles depuis la catégorie virtuelle Favoris
-// en tête de la liste (cf. buildCategoryList). Persistés par chemin complet
-// (`full`) sur la carte SD ; taille mémorisée au moment de l'ajout (affichage
-// seulement, peut devenir périmée si le fichier change ensuite).
-const FAVORITES_KEY = "edlink.favorites";
-
-function getFavorites() {
-  try { return JSON.parse(localStorage.getItem(FAVORITES_KEY) || "[]"); }
-  catch { return []; }
+// en tête de la liste (cf. buildCategoryList). État Rust partagé avec le
+// serveur mobile (voir favorites.rs) — PAS un simple localStorage : un ajout/
+// retrait depuis le téléphone doit être vu immédiatement ici et vice-versa.
+// Persisté par chemin complet (`full`) sur la carte SD ; le renommage/
+// effacement d'un fichier (menu contextuel) garde cette liste à jour depuis
+// le backend (rename_sd/delete_sd), pas besoin de le refaire ici.
+async function getFavorites() {
+  return (await safeInvoke("get_favorites")) || [];
 }
-function saveFavorites(list) {
-  try { localStorage.setItem(FAVORITES_KEY, JSON.stringify(list)); } catch { /* tant pis */ }
+async function isFavorite(full) {
+  return (await getFavorites()).some((f) => f.full === full);
 }
-function isFavorite(full) {
-  return getFavorites().some((f) => f.full === full);
-}
-function addFavorite(entry, full) {
-  const list = getFavorites();
-  if (!list.some((f) => f.full === full)) {
-    list.push({ full, name: entry.name, size: entry.size });
-    saveFavorites(list);
-  }
-}
-function removeFavorite(full) {
-  saveFavorites(getFavorites().filter((f) => f.full !== full));
-}
-function renameFavorite(oldFull, newFull, newName) {
-  const list = getFavorites();
-  const idx = list.findIndex((f) => f.full === oldFull);
-  if (idx !== -1) {
-    list[idx] = { ...list[idx], full: newFull, name: newName };
-    saveFavorites(list);
-  }
-}
-function toggleFavorite(entry, full) {
-  if (isFavorite(full)) removeFavorite(full); else addFavorite(entry, full);
+async function toggleFavorite(entry, full) {
+  return await safeInvoke("toggle_favorite", { full, name: entry.name, size: entry.size });
 }
 
 // Catégories virtuelles de l'onglet GAMES (en plus des vrais sous-dossiers) :
@@ -846,7 +825,7 @@ async function buildMosaic() {
   if (isFavorites) {
     // Chaque favori mémorise déjà son chemin complet (`full`) : pas de
     // list_sd, juste { name, size, is_dir: false, full } directement utilisable.
-    games = getFavorites()
+    games = (await getFavorites())
       .map((f) => ({ name: f.name, size: f.size, is_dir: false, full: f.full }))
       .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
   } else {
@@ -1174,18 +1153,20 @@ els.gameDownload.addEventListener("click", () => {
 });
 
 // ♡/♥ de la fiche de détail : bascule ce jeu dans/hors des favoris (catégorie
-// virtuelle "Favoris" de l'onglet GAMES, indépendante de son vrai dossier).
-function updateFavBtn(full) {
-  const fav = isFavorite(full);
+// virtuelle "Favoris" de l'onglet GAMES, indépendante de son vrai dossier) —
+// état partagé avec le serveur mobile (voir favorites.rs), pas un simple
+// localStorage.
+async function updateFavBtn(full) {
+  const fav = await isFavorite(full);
   els.gameFav.textContent = fav ? "♥" : "♡";
   els.gameFav.classList.toggle("active", fav);
   els.gameFav.title = t(fav ? "games.favRemoveTitle" : "games.favAddTitle");
 }
-els.gameFav.addEventListener("click", () => {
+els.gameFav.addEventListener("click", async () => {
   if (!gameModalTarget) return;
   const { entry, full } = gameModalTarget;
-  toggleFavorite(entry, full);
-  updateFavBtn(full);
+  await toggleFavorite(entry, full);
+  await updateFavBtn(full);
   // Retirer un favori pendant qu'on est dans la vue Favoris doit le faire
   // disparaître de la mosaïque derrière la fiche (élément séparé, reste ouverte).
   if (gamesLevel === "mosaic" && gamesCategory === VIRTUAL_FAVORITES_CATEGORY) renderGamesTab();
@@ -1327,20 +1308,21 @@ els.sdCtxMenu.addEventListener("click", async (e) => {
   } else if (action === "delete") {
     const ok = await askConfirm(t("sd.deleteConfirm", { name: entry.name }));
     if (!ok) return;
+    // delete_sd retire aussi ce chemin des favoris côté backend (voir
+    // favorites::forget dans lib.rs) — rien à faire ici pour ça.
     const res = await safeInvoke("delete_sd", { path: full });
     if (res !== null) {
       log(t("sd.deletedLog", { name: entry.name }), "ok");
-      removeFavorite(full); // évite un favori fantôme sur un fichier effacé
       refreshAfterSdChange();
     }
   } else if (action === "rename") {
     const newName = await askPrompt(t("sd.renamePrompt"), entry.name);
     if (!newName || newName === entry.name) return;
+    // rename_sd met aussi à jour le favori correspondant côté backend (voir
+    // favorites::rename dans lib.rs).
     const res = await safeInvoke("rename_sd", { path: full, new_name: newName });
     if (res !== null) {
       log(t("sd.renamedLog", { name: newName }), "ok");
-      const parent = full.includes("/") ? full.slice(0, full.lastIndexOf("/")) : "";
-      renameFavorite(full, parent ? `${parent}/${newName}` : newName, newName);
       refreshAfterSdChange();
     }
   }

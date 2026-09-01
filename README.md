@@ -79,7 +79,7 @@ binaire non signé) et [`GUIDE_UTILISATEUR.md`](docs/GUIDE_UTILISATEUR.md).
 | **Capture d'écran** | Capture le menu de la carte (VRAM + palette → PNG) |
 | **Visualiseur mémoire** (lecture seule) | RAM HuCard via `memrd` ; VRAM/CRAM via l'instantané `*v` du menu |
 | **Sprites / tuiles VRAM** | Planche de cellules 4 bpp décodées de la VRAM : 8×8 (fond) ou les 6 tailles de sprite du VDC (16×16 à 32×64), choix de palette, zoom, clic (ou glisser pour une plage) → adresse VRAM + n° de pattern ; « 🔒 Locker » recadre la vue sur la seule sélection ; export PNG de la planche ou de la seule sélection |
-| **Accès mobile** (onglet Connexion) | Petit serveur web local (bouton Démarrer/Arrêter) donnant accès, depuis le navigateur d'un smartphone sur le même réseau Wi-Fi, à une version simplifiée de l'onglet GAMES : catégories, mosaïque avec pochettes, lancement d'un jeu. Adresse affichée en texte + QR code à scanner. Sans authentification — réseau local de confiance uniquement |
+| **Accès mobile** (onglet Connexion) | Petit serveur web local (bouton Démarrer/Arrêter) donnant accès, depuis le navigateur d'un smartphone sur le même réseau Wi-Fi, à une version simplifiée de l'onglet GAMES : catégories (dont Favoris, partagés en temps réel avec le bureau), mosaïque avec pochettes, fiche détaillée (écran-titre/capture en jeu alternés), lancement d'un jeu. Adresse affichée en texte + QR code à scanner. Sans authentification — réseau local de confiance uniquement |
 
 ## Architecture
 

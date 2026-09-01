@@ -80,7 +80,7 @@ guide).
 | **Screen capture** | Captures the cartridge's menu (VRAM + palette → PNG) |
 | **Memory viewer** (read-only) | HuCard RAM via `memrd`; VRAM/CRAM via the menu's `*v` snapshot |
 | **Sprites / VRAM tiles** | Sheet of 4bpp cells decoded from VRAM: 8×8 (background) or the VDC's 6 sprite sizes (16×16 to 32×64), palette choice, zoom, click (or drag for a range) → VRAM address + pattern number; "🔒 Lock" crops the view to just the selection; PNG export of the whole sheet or just the selection |
-| **Mobile access** (Connection tab) | Small local web server (Start/Stop button) giving access, from a smartphone's browser on the same Wi-Fi network, to a simplified version of the GAMES tab: categories, boxart mosaic, launching a game. Address shown as text + a scannable QR code. No authentication — trusted local network only |
+| **Mobile access** (Connection tab) | Small local web server (Start/Stop button) giving access, from a smartphone's browser on the same Wi-Fi network, to a simplified version of the GAMES tab: categories (including Favorites, shared live with the desktop), boxart mosaic, detail sheet (title screen/in-game snapshot alternating), launching a game. Address shown as text + a scannable QR code. No authentication — trusted local network only |
 
 ## Architecture
 

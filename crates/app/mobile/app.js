@@ -2,14 +2,18 @@
 // Servie par le serveur HTTP local (crates/app/src/mobile_server.rs) — pas
 // de Tauri ici, juste fetch() vers l'API JSON exposée par ce même serveur.
 // Portée volontairement réduite par rapport à l'onglet GAMES du bureau :
-// catégories (+ catégorie virtuelle "GAMES" si la racine n'a pas de
-// sous-dossier) → mosaïque avec pochette → lancer. Pas de Favoris, pas de
-// changement de dossier/source de pochette (ça reste géré depuis
-// l'ordinateur ; le téléphone hérite juste des réglages courants).
+// catégories (+ virtuelles GAMES et Favoris) → mosaïque avec pochette →
+// fiche détail (écran-titre/capture alternés, favoris) → lancer. Pas de
+// changement de dossier de jeux ni de source de pochette depuis le
+// téléphone (ça reste géré depuis l'ordinateur ; le téléphone hérite juste
+// des réglages courants). Les favoris, eux, sont un état partagé avec le
+// bureau (voir favorites.rs) : ajouter/retirer ici se voit immédiatement
+// dans l'app desktop et vice-versa.
 
 const $ = (id) => document.getElementById(id);
 const app = $("app");
 const statusEl = $("status");
+const FAVORITES_KEY = "__FAVORITES__";
 
 const CATEGORY_PALETTE = [
   ["#ff3d6a", "#ff8a3d"],
@@ -75,21 +79,6 @@ async function refreshStatus() {
   }
 }
 
-// ---- modale de confirmation (remplace confirm(), peu fiable sur mobile) ----
-function askConfirm(message) {
-  return new Promise((resolve) => {
-    const modal = $("modal");
-    $("modal-msg").textContent = message;
-    modal.hidden = false;
-    const done = (v) => { modal.hidden = true; ok.removeEventListener("click", onOk); cancel.removeEventListener("click", onCancel); resolve(v); };
-    const ok = $("modal-ok"), cancel = $("modal-cancel");
-    const onOk = () => done(true);
-    const onCancel = () => done(false);
-    ok.addEventListener("click", onOk);
-    cancel.addEventListener("click", onCancel);
-  });
-}
-
 // ---- vue catégories ----
 async function renderCategories() {
   app.innerHTML = "";
@@ -112,7 +101,8 @@ async function renderCategories() {
     const row = document.createElement("div");
     row.className = "cat-row";
     row.style.background = `linear-gradient(120deg, ${c1}, ${c2})`;
-    row.innerHTML = `<span class="cat-icon">${c.key ? categoryIcon(c.label) : "🎮"}</span>
+    const icon = c.key === FAVORITES_KEY ? "❤️" : (c.key ? categoryIcon(c.label) : "🎮");
+    row.innerHTML = `<span class="cat-icon">${icon}</span>
       <span class="cat-title">${c.label}</span><span class="cat-chev">›</span>`;
     row.addEventListener("click", () => renderMosaic(c.key, c.label, [c1, c2]));
     list.appendChild(row);
@@ -157,7 +147,9 @@ async function renderMosaic(categoryKey, label, colors) {
   if (!games.length) {
     const err = document.createElement("p");
     err.className = "games-error";
-    err.textContent = "Aucun jeu dans cette catégorie.";
+    err.textContent = categoryKey === FAVORITES_KEY
+      ? "Aucun favori pour l'instant. Ouvrez la fiche d'un jeu et touchez ♡ pour l'ajouter."
+      : "Aucun jeu dans cette catégorie.";
     wrap.appendChild(err);
     app.appendChild(wrap);
     return;
@@ -182,16 +174,113 @@ async function renderMosaic(categoryKey, label, colors) {
     label.className = "mosaic-label";
     label.textContent = g.name;
     card.append(frame, label);
-    card.addEventListener("click", () => launchGame(g));
+    card.addEventListener("click", () => openDetail(g));
     grid.appendChild(card);
   }
   wrap.appendChild(grid);
   app.appendChild(wrap);
 }
 
+// ---- fiche de détail (tap sur une vignette) ----
+// Vérifie qu'une image se charge réellement (le serveur renvoie 404 en PNG
+// absent — <img src> seul ne dit pas si ça a marché tant qu'on n'écoute pas
+// load/error).
+function probeImage(url) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => resolve(true);
+    img.onerror = () => resolve(false);
+    img.src = url;
+  });
+}
+
+let detailTarget = null; // { name, size, path }
+let detailSnapTimer = null;
+
+function stopDetailSnapSlideshow() {
+  if (detailSnapTimer) { clearInterval(detailSnapTimer); detailSnapTimer = null; }
+  $("detail-snap-wrap").hidden = true;
+}
+
+// Alterne écran-titre / capture en jeu toutes les 2s quand les deux sont
+// disponibles (même logique que la fiche de détail du bureau) ; si un seul
+// des deux existe, il reste affiché fixe, sans bascule.
+async function startDetailSnapSlideshow(name) {
+  stopDetailSnapSlideshow();
+  const titleUrl = "/api/cover?kind=title&name=" + encodeURIComponent(name);
+  const snapUrl = "/api/cover?kind=snap&name=" + encodeURIComponent(name);
+  const [hasTitle, hasSnap] = await Promise.all([probeImage(titleUrl), probeImage(snapUrl)]);
+  if (detailTarget?.name !== name) return; // fiche fermée/changée entre-temps
+
+  const frames = [];
+  if (hasTitle) frames.push({ uri: titleUrl, label: "Écran-titre" });
+  if (hasSnap) frames.push({ uri: snapUrl, label: "Capture en jeu" });
+  if (!frames.length) return;
+
+  const wrap = $("detail-snap-wrap"), img = $("detail-snap"), label = $("detail-snap-label");
+  wrap.hidden = false;
+  let idx = 0;
+  const show = () => {
+    img.src = frames[idx].uri;
+    label.textContent = frames[idx].label;
+    label.hidden = frames.length < 2;
+  };
+  show();
+  if (frames.length > 1) {
+    detailSnapTimer = setInterval(() => { idx = (idx + 1) % frames.length; show(); }, 2000);
+  }
+}
+
+async function updateDetailFavBtn(full) {
+  const favs = await getJSON("/api/favorites").catch(() => []);
+  const fav = favs.some((f) => f.full === full);
+  const btn = $("detail-fav");
+  btn.textContent = fav ? "♥" : "♡";
+  btn.classList.toggle("active", fav);
+  btn.title = fav ? "Retirer des favoris" : "Ajouter aux favoris";
+}
+
+async function openDetail(g) {
+  detailTarget = g;
+  $("detail-title").textContent = g.name;
+  $("detail-meta").textContent = fmtSize(g.size);
+
+  const img = $("detail-boxart"), ph = $("detail-boxart-ph");
+  img.hidden = true; ph.hidden = false;
+  stopDetailSnapSlideshow();
+  $("detail-modal").hidden = false;
+  updateDetailFavBtn(g.path);
+
+  const boxartUrl = "/api/cover?kind=boxart&name=" + encodeURIComponent(g.name);
+  probeImage(boxartUrl).then((has) => {
+    if (detailTarget !== g) return; // fermé/changé entre-temps
+    if (has) { img.src = boxartUrl; img.hidden = false; ph.hidden = true; }
+  });
+  startDetailSnapSlideshow(g.name);
+}
+
+function closeDetail() {
+  $("detail-modal").hidden = true;
+  stopDetailSnapSlideshow();
+  detailTarget = null;
+}
+$("detail-close").addEventListener("click", closeDetail);
+$("detail-fav").addEventListener("click", async () => {
+  if (!detailTarget) return;
+  await fetch("/api/favorites/toggle", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ full: detailTarget.path, name: detailTarget.name, size: detailTarget.size }),
+  });
+  await updateDetailFavBtn(detailTarget.path);
+});
+$("detail-launch").addEventListener("click", () => {
+  if (detailTarget) { closeDetail(); launchGame(detailTarget); }
+});
+
+// La fiche de détail sert déjà d'écran de confirmation (comme sur le
+// bureau) : pas de second "êtes-vous sûr ?" ici, on lance directement.
 async function launchGame(g) {
-  const ok = await askConfirm(`Lancer « ${g.name} » (${fmtSize(g.size)}) sur la console ?`);
-  if (!ok) return;
   try {
     const res = await fetch("/api/launch", {
       method: "POST",
