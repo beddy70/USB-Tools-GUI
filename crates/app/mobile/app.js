@@ -275,7 +275,12 @@ $("detail-fav").addEventListener("click", async () => {
   await updateDetailFavBtn(detailTarget.path);
 });
 $("detail-launch").addEventListener("click", () => {
-  if (detailTarget) { closeDetail(); launchGame(detailTarget); }
+  if (!detailTarget) return;
+  // Capturer avant de fermer : closeDetail() met detailTarget à null, donc
+  // l'appeler d'abord ferait lancer launchGame(null).
+  const g = detailTarget;
+  closeDetail();
+  launchGame(g);
 });
 
 // La fiche de détail sert déjà d'écran de confirmation (comme sur le
