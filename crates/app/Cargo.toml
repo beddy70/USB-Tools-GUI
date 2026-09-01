@@ -22,3 +22,14 @@ percent-encoding = "2"
 # Similarité de texte (recherche de pochette au plus proche quand aucune
 # variante exacte ne correspond) — pure Rust, sans dépendance lourde.
 strsim = "0.11"
+# Serveur web mobile (onglet GAMES accessible depuis un smartphone sur le
+# même réseau local) : serveur HTTP bloquant minimal, pur Rust, sans piste
+# TLS (réseau local de confiance uniquement, pas d'HTTPS) ni runtime async
+# supplémentaire.
+tiny_http = { version = "0.12", default-features = false }
+# QR code (adresse du serveur mobile) : on encode nous-mêmes la matrice en
+# PNG via `png` (déjà utilisé par edlink-core/image.rs) plutôt que d'activer
+# la feature "image" de `qrcode`, pour ne pas tirer la dépendance `image`
+# (lourde, inutile ici).
+qrcode = { version = "0.14", default-features = false }
+png = "0.18"

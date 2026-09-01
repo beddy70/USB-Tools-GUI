@@ -116,6 +116,15 @@ button.btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; box-s
 .info-card pre { font-family: var(--mono); font-size: 13px; color: var(--text);
   white-space: pre-wrap; line-height: 1.6; }
 
+/* ---------- Accès mobile (serveur web local) ---------- */
+.mobile-card { max-width: 660px; }
+.mobile-card h3 { font-size: 14px; color: var(--cyan); letter-spacing: .5px; margin-bottom: 8px; }
+.mobile-active { display: flex; gap: 16px; align-items: center; margin-top: 12px; }
+.mobile-active[hidden] { display: none; }
+.mobile-active img { width: 132px; height: 132px; border-radius: 8px; background: #fff; padding: 6px; }
+.mobile-active-info { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.mobile-url { font-family: var(--mono); font-size: 14px; color: var(--green); word-break: break-all; }
+
 /* ---------- Capture d'écran / réglages de l'image ---------- */
 .screen-card { max-width: 660px; }
 .screen-card h3 { font-size: 14px; color: var(--cyan); letter-spacing: .5px; margin-bottom: 12px; }

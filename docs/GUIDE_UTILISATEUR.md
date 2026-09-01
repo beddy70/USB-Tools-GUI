@@ -13,13 +13,14 @@ l'architecture technique, le protocole ou la compilation, voir
 2. [Installation (Windows)](#installation-windows)
 3. [Premier lancement et connexion](#premier-lancement-et-connexion)
 4. [Onglet GAMES](#onglet-games)
-5. [Onglet Carte SD](#onglet-carte-sd)
-6. [Onglet Jouer](#onglet-jouer)
-7. [Onglet Mémoire](#onglet-mémoire)
-8. [Onglet Sprites](#onglet-sprites)
-9. [Dépannage](#dépannage)
-10. [Grille de test (QA)](#grille-de-test-qa)
-11. [Questions fréquentes](#questions-fréquentes)
+5. [Accès mobile](#accès-mobile)
+6. [Onglet Carte SD](#onglet-carte-sd)
+7. [Onglet Jouer](#onglet-jouer)
+8. [Onglet Mémoire](#onglet-mémoire)
+9. [Onglet Sprites](#onglet-sprites)
+10. [Dépannage](#dépannage)
+11. [Grille de test (QA)](#grille-de-test-qa)
+12. [Questions fréquentes](#questions-fréquentes)
 
 ## Ce qu'il vous faut
 
@@ -162,6 +163,38 @@ vignette reste sans jaquette.
 dans la mosaïque, cliquez le petit bouton **⚙** qui apparaît, et indiquez le
 titre exact tel qu'il figure dans la base choisie (sans l'extension). C'est
 mémorisé pour les prochaines fois.
+
+## Accès mobile
+
+Dans l'onglet **🔌 Connexion**, la carte **📱 Accès mobile** permet de
+retrouver une version simplifiée de l'onglet GAMES (catégories, mosaïque
+avec pochettes, lancement d'un jeu) depuis le navigateur d'un smartphone
+connecté au **même réseau Wi-Fi** que l'ordinateur.
+
+1. Cliquez **▶ Démarrer**. Un QR code et une adresse (ex.
+   `http://192.168.1.23:4590`) apparaissent.
+2. Sur le téléphone, scannez le QR code avec l'appareil photo, ou tapez
+   l'adresse dans un navigateur.
+3. La page mobile affiche les mêmes catégories que l'ordinateur (y compris
+   la catégorie virtuelle GAMES si le dossier de base n'a pas de
+   sous-dossier — voir [Onglet GAMES](#onglet-games) — mais pas les
+   Favoris, voir plus bas) et les mêmes pochettes (réseau ou locale, selon
+   la source choisie sur l'ordinateur). Toucher un jeu propose de le
+   lancer directement sur la console.
+4. **⏹ Arrêter** ferme le serveur — plus personne ne peut y accéder.
+
+> ⚠️ **Sans authentification.** Ce serveur est pensé pour un réseau Wi-Fi
+> domestique de confiance : n'importe qui sur ce réseau peut y accéder tant
+> qu'il est démarré, et il ne doit **jamais** être exposé sur Internet (pas
+> de redirection de port sur votre box/routeur). Éteignez-le si vous ne
+> l'utilisez pas.
+
+**Limites de la version mobile** (volontairement plus simple que le
+bureau) : pas de catégorie Favoris (liste stockée dans le navigateur de
+l'ordinateur, non partagée), pas de changement de dossier de jeux ni de
+source de pochette depuis le téléphone — ces réglages restent ceux
+configurés sur l'ordinateur. La connexion à la carte (USB) se fait
+toujours depuis l'ordinateur, jamais depuis le téléphone.
 
 ## Onglet Carte SD
 

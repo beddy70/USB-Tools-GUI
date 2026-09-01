@@ -38,6 +38,8 @@ const els = {
   resWVal: $("res-w-val"), resHVal: $("res-h-val"),
   scrollXVal: $("scroll-x-val"), scrollYVal: $("scroll-y-val"),
   log: $("log"),
+  mobileStart: $("mobile-start"), mobileStop: $("mobile-stop"),
+  mobileActive: $("mobile-active"), mobileQr: $("mobile-qr"), mobileUrl: $("mobile-url"),
 };
 
 // ------------------------------------------------------------- modale
@@ -230,6 +232,46 @@ onLangChange(refreshPorts);
 $("refresh-ports").addEventListener("click", refreshPorts);
 $("connect-btn").addEventListener("click", doConnect);
 $("disconnect-btn").addEventListener("click", doDisconnect);
+
+// ------------------------------------------------ serveur web mobile
+// Onglet GAMES accessible depuis un smartphone sur le même réseau (voir
+// crates/app/src/mobile_server.rs) — pas d'authentification, réseau local de
+// confiance uniquement. Le backend expose son état sous forme de
+// { url, port } (démarré) ; on affiche l'URL + un QR code à scanner.
+async function showMobileServerActive(info) {
+  els.mobileStart.hidden = true;
+  els.mobileStop.hidden = false;
+  els.mobileActive.hidden = false;
+  els.mobileUrl.textContent = info.url;
+  const qrB64 = await safeInvoke("get_server_qr", { data: info.url });
+  if (qrB64) els.mobileQr.src = "data:image/png;base64," + qrB64;
+}
+function hideMobileServerActive() {
+  els.mobileStart.hidden = false;
+  els.mobileStop.hidden = true;
+  els.mobileActive.hidden = true;
+  els.mobileQr.src = "";
+  els.mobileUrl.textContent = "";
+}
+els.mobileStart.addEventListener("click", async () => {
+  syncMobileSettings();
+  const info = await safeInvoke("start_mobile_server", {});
+  if (info) {
+    await showMobileServerActive(info);
+    log(t("mobile.startedLog", { url: info.url }), "ok");
+  }
+});
+els.mobileStop.addEventListener("click", async () => {
+  const res = await safeInvoke("stop_mobile_server");
+  if (res !== null) { hideMobileServerActive(); log(t("mobile.stoppedLog"), "ok"); }
+});
+// Au chargement : si le serveur tournait déjà (rechargement du frontend en
+// dev, `cargo tauri dev`), réaffiche son état au lieu de perdre la trace du
+// port ouvert.
+(async () => {
+  const info = await safeInvoke("mobile_server_status");
+  if (info) await showMobileServerActive(info);
+})();
 
 // ------------------------------------------- explorateur de carte SD
 function joinSdPath(dir, name) {
@@ -526,6 +568,18 @@ function thumbArgs() {
   return { source: thumbSource, local_dir: thumbSource === "local" ? thumbLocalDir : null };
 }
 
+// Reflète ces réglages côté Rust (voir mobile_server.rs) pour que le serveur
+// web mobile (onglet Connexion) serve au téléphone le même dossier de jeux
+// et la même source de pochette que ceux configurés ici — appelé à chaque
+// changement de l'un des trois, et une fois au démarrage.
+function syncMobileSettings() {
+  safeInvoke("sync_mobile_settings", {
+    games_root: gamesRoot,
+    thumb_source: thumbSource,
+    thumb_local_dir: thumbSource === "local" ? thumbLocalDir : null,
+  });
+}
+
 // Favoris : jeux marqués via le ♡/♥ de la fiche de détail, indépendamment de
 // leur catégorie/dossier — accessibles depuis la catégorie virtuelle Favoris
 // en tête de la liste (cf. buildCategoryList). Persistés par chemin complet
@@ -632,6 +686,7 @@ async function renderGamesBrowser() {
     if (!v) return;
     gamesRoot = normalizeGamesPath(v);
     saveGamesRoot(gamesRoot);
+    syncMobileSettings();
     gamesLevel = "categories";
     renderGamesTab();
   });
@@ -659,12 +714,14 @@ async function renderGamesBrowser() {
     if (!dir) return;
     thumbLocalDir = dir;
     saveThumbLocalDir(dir);
+    syncMobileSettings();
     boxartCache.clear();
     renderGamesTab();
   });
   sourceSelect.addEventListener("change", () => {
     thumbSource = sourceSelect.value;
     saveThumbSource(thumbSource);
+    syncMobileSettings();
     boxartCache.clear();
     renderGamesTab();
   });
@@ -2522,4 +2579,5 @@ $("save-screen").addEventListener("click", async () => {
 })();
 refreshPorts();
 setInterval(refreshPorts, 4000); // rafraîchit la liste des ports
+syncMobileSettings(); // au cas où le serveur mobile serait démarré tout de suite
 log(t("log.ready"), "info");

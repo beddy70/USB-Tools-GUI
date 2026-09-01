@@ -1,0 +1,108 @@
+/* Page mobile du serveur GAMES — palette reprise (en plus léger) du thème
+   « retrowave » de l'application desktop, pensée pour un écran de téléphone
+   (grosses cibles tactiles, une seule colonne de mise en page). */
+
+:root {
+  --bg: #0e0c1a;
+  --panel: #181530;
+  --panel-2: #211d3f;
+  --border: rgba(255, 255, 255, 0.12);
+  --text: #f1eefc;
+  --muted: #9a93c2;
+  --cyan: #22e0ff;
+  --magenta: #ff2dd4;
+  --green: #3dff9a;
+  --red: #ff4d6d;
+  --yellow: #ffe066;
+}
+
+* { box-sizing: border-box; }
+html, body {
+  margin: 0; padding: 0; height: 100%;
+  background: var(--bg); color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 16px; background: rgba(20, 18, 43, 0.9);
+  border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; z-index: 5;
+}
+.topbar h1 { font-size: 18px; margin: 0; }
+.status { font-size: 12px; color: var(--muted); }
+.status.on { color: var(--green); }
+.status.off { color: var(--red); }
+
+#app { padding: 14px; padding-bottom: 40px; }
+.hint { color: var(--muted); font-size: 13px; text-align: center; padding: 30px 10px; line-height: 1.6; }
+
+/* Catégories : grosses rangées colorées, façon liste d'arcade */
+.cat-list { display: flex; flex-direction: column; gap: 10px; }
+.cat-row {
+  display: flex; align-items: center; gap: 12px; padding: 16px 18px;
+  border-radius: 12px; min-height: 60px; color: #fff;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+  -webkit-user-select: none; user-select: none;
+}
+.cat-row:active { transform: scale(0.98); }
+.cat-icon { font-size: 24px; }
+.cat-title {
+  flex: 1; font-weight: 700; font-size: 18px; letter-spacing: 0.3px;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+}
+.cat-chev { font-size: 20px; opacity: 0.85; }
+
+/* Mosaïque */
+.mosaic-header { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+.mosaic-title { font-size: 18px; font-weight: 700; margin: 0; }
+.mosaic-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 14px;
+}
+.mosaic-card { display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; }
+.mosaic-frame {
+  width: 100%; aspect-ratio: 1; border-radius: 10px; border: 1px solid var(--border);
+  background: var(--panel-2); display: flex; align-items: center; justify-content: center;
+  overflow: hidden;
+}
+.mosaic-frame img { width: 100%; height: 100%; object-fit: cover; }
+.mosaic-frame .ph { font-size: 30px; opacity: 0.35; }
+.mosaic-label {
+  font-size: 11.5px; color: var(--muted); line-height: 1.3;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; width: 100%;
+}
+
+.btn {
+  border-radius: 8px; padding: 10px 16px; font-size: 14px; font-weight: 600;
+  border: 1px solid var(--border); background: var(--panel-2); color: var(--text);
+  cursor: pointer;
+}
+.btn.ghost { background: transparent; }
+.btn.primary { background: var(--magenta); border-color: var(--magenta); color: #fff; }
+.btn:active { transform: scale(0.97); }
+
+.games-error { padding: 30px 16px; text-align: center; color: var(--muted); font-size: 13px; line-height: 1.7; }
+
+/* Modale de confirmation de lancement */
+.modal-backdrop {
+  position: fixed; inset: 0; background: rgba(0, 0, 0, 0.6);
+  display: flex; align-items: center; justify-content: center; z-index: 10; padding: 20px;
+}
+.modal-backdrop[hidden] { display: none; }
+.modal-box {
+  background: var(--panel); border: 1px solid var(--border); border-radius: 14px;
+  padding: 20px; width: 100%; max-width: 340px;
+}
+.modal-box p { margin: 0 0 18px; font-size: 15px; line-height: 1.5; }
+.modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+
+.toast {
+  position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
+  background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px;
+  padding: 10px 16px; font-size: 13px; color: var(--text); z-index: 20;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+.toast.err { border-color: var(--red); color: var(--red); }
+.toast.ok { border-color: var(--green); color: var(--green); }

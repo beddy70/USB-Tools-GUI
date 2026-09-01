@@ -57,6 +57,23 @@
           <div class="card info-card" id="info-card" hidden>
             <pre id="info-text"></pre>
           </div>
+
+          <div class="card mobile-card">
+            <h3 data-i18n="mobile.title">📱 Accès mobile</h3>
+            <p class="hint" data-i18n="mobile.hint">Ouvre un petit serveur web local pour retrouver l'onglet GAMES (catégories, mosaïque, lancer un jeu) depuis le navigateur d'un smartphone connecté au même réseau Wi-Fi.</p>
+            <div class="row">
+              <button class="btn primary" id="mobile-start" data-i18n="mobile.start">▶ Démarrer</button>
+              <button class="btn danger ghost" id="mobile-stop" data-i18n="mobile.stop" hidden>⏹ Arrêter</button>
+            </div>
+            <div class="mobile-active" id="mobile-active" hidden>
+              <img id="mobile-qr" alt="QR code" />
+              <div class="mobile-active-info">
+                <span class="mobile-url" id="mobile-url"></span>
+                <span class="hint" data-i18n="mobile.scanHint">Scannez ce QR code avec l'appareil photo du téléphone, ou saisissez l'adresse dans son navigateur.</span>
+                <span class="hint" data-i18n="mobile.noAuthHint">⚠ Sans authentification — réseau local de confiance uniquement, ne jamais exposer sur Internet.</span>
+              </div>
+            </div>
+          </div>
         </section>
 
         <!-- GAMES : navigateur catégories -> mosaïque -->

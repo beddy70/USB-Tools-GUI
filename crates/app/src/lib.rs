@@ -3,6 +3,8 @@
 //! Expose au frontend web des commandes de connexion et d'opérations sur la
 //! carte (infos, transfert fichiers, lancement, reset, capture, memrd).
 
+mod mobile_server;
+mod qr;
 mod thumbnails;
 
 use edlink_core::{EdError, Ted};
@@ -18,6 +20,9 @@ struct AppState {
     /// re-rendre l'image avec d'autres réglages (BAT, résolution, défilement)
     /// sans réinterroger la carte.
     screen_snap: Mutex<Option<(Vec<u8>, Vec<u8>)>>,
+    /// Serveur web mobile (onglet GAMES accessible depuis un smartphone) —
+    /// voir `mobile_server.rs`.
+    mobile: mobile_server::MobileState,
 }
 
 /// Résumé retourné après connexion.
@@ -99,6 +104,7 @@ pub fn run() {
             ted: Mutex::new(None),
             dropped: Mutex::new(Vec::new()),
             screen_snap: Mutex::new(None),
+            mobile: mobile_server::MobileState::default(),
         })
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::DragDrop(tauri::DragDropEvent::Drop { paths, .. }) = event
@@ -135,6 +141,11 @@ pub fn run() {
             pick_file,
             pick_folder,
             pick_save,
+            start_mobile_server,
+            stop_mobile_server,
+            mobile_server_status,
+            sync_mobile_settings,
+            get_server_qr,
             get_dropped,
             clear_dropped,
             get_build_info,
@@ -610,6 +621,54 @@ fn pick_folder() -> Result<Option<String>, String> {
     Ok(rfd::FileDialog::new()
         .pick_folder()
         .map(|p| p.to_string_lossy().into_owned()))
+}
+
+/// Démarre le serveur web mobile (onglet GAMES accessible depuis un
+/// smartphone). No-op si déjà démarré. Port fixe par défaut : suffisamment
+/// improbable pour ne pas entrer en conflit avec d'autres applications
+/// locales, changeable si besoin via l'argument `port`.
+#[tauri::command]
+fn start_mobile_server(app: tauri::AppHandle, port: Option<u16>) -> Result<mobile_server::ServerInfo, String> {
+    mobile_server::start(app, port.unwrap_or(4590))
+}
+
+/// Arrête le serveur web mobile (no-op s'il n'est pas démarré).
+#[tauri::command]
+fn stop_mobile_server(app: tauri::AppHandle) -> Result<(), String> {
+    mobile_server::stop(&app)
+}
+
+/// État courant du serveur mobile (`None` = arrêté) — utilisé au chargement
+/// de l'app pour réafficher l'URL/QR si le serveur tournait déjà (rare, mais
+/// possible après un rechargement du frontend en dev).
+#[tauri::command]
+fn mobile_server_status(app: tauri::AppHandle) -> Result<Option<mobile_server::ServerInfo>, String> {
+    Ok(mobile_server::status(&app))
+}
+
+/// Reflète côté Rust les réglages GAMES du bureau (dossier de jeux, source de
+/// pochette) pour que le serveur mobile serve la même chose au téléphone.
+/// Appelée par main.js à chaque changement de l'un de ces réglages.
+#[tauri::command(rename_all = "snake_case")]
+fn sync_mobile_settings(
+    state: State<'_, AppState>,
+    games_root: String,
+    thumb_source: String,
+    thumb_local_dir: Option<String>,
+) -> Result<(), String> {
+    let mut s = state.mobile.settings.lock().unwrap();
+    s.games_root = games_root;
+    s.thumb_source = thumb_source;
+    s.thumb_local_dir = thumb_local_dir;
+    Ok(())
+}
+
+/// PNG (base64) d'un QR code encodant `data` (l'URL du serveur mobile) —
+/// affiché dans l'onglet Connexion pour que l'utilisateur scanne avec son
+/// téléphone au lieu de retaper l'adresse.
+#[tauri::command]
+fn get_server_qr(data: String) -> Result<String, String> {
+    qr::png_for(&data).map(|bytes| b64(&bytes))
 }
 
 /// Ouvre un sélecteur de destination de fichier.

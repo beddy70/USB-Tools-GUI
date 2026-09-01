@@ -45,6 +45,15 @@ fr: {
   "connect.realHardwareHint": "Matériel réel : la vue Mémoire est en mode conservateur (pas de lecture auto, clic « Rafraîchir »). VRAM/CRAM = instantané via le menu de la carte.",
   "connect.disconnectedLog": "Déconnecté",
 
+  "mobile.title": "📱 Accès mobile",
+  "mobile.hint": "Ouvre un petit serveur web local pour retrouver l'onglet GAMES (catégories, mosaïque, lancer un jeu) depuis le navigateur d'un smartphone connecté au même réseau Wi-Fi.",
+  "mobile.start": "▶ Démarrer",
+  "mobile.stop": "⏹ Arrêter",
+  "mobile.scanHint": "Scannez ce QR code avec l'appareil photo du téléphone, ou saisissez l'adresse dans son navigateur.",
+  "mobile.noAuthHint": "⚠ Sans authentification — réseau local de confiance uniquement, ne jamais exposer sur Internet.",
+  "mobile.startedLog": "Serveur mobile démarré : {url}",
+  "mobile.stoppedLog": "Serveur mobile arrêté",
+
   "games.title": "Jeux par catégorie",
   "games.rootLabel": "📁 {root}",
   "games.refreshTitle": "Actualiser",
@@ -282,6 +291,15 @@ en: {
   "connect.emulatorSuffix": " · emulator",
   "connect.realHardwareHint": "Real hardware: the Memory view is in conservative mode (no auto-read, click \"Refresh\"). VRAM/CRAM = snapshot via the cartridge menu.",
   "connect.disconnectedLog": "Disconnected",
+
+  "mobile.title": "📱 Mobile access",
+  "mobile.hint": "Opens a small local web server so you can browse the GAMES tab (categories, mosaic, launch a game) from a smartphone's browser on the same Wi-Fi network.",
+  "mobile.start": "▶ Start",
+  "mobile.stop": "⏹ Stop",
+  "mobile.scanHint": "Scan this QR code with the phone's camera, or type the address into its browser.",
+  "mobile.noAuthHint": "⚠ No authentication — trusted local network only, never expose this on the Internet.",
+  "mobile.startedLog": "Mobile server started: {url}",
+  "mobile.stoppedLog": "Mobile server stopped",
 
   "games.title": "Games by category",
   "games.rootLabel": "📁 {root}",
@@ -521,6 +539,15 @@ de: {
   "connect.realHardwareHint": "Echte Hardware: Die Speicheransicht ist im konservativen Modus (kein automatisches Lesen, Klick auf „Aktualisieren“). VRAM/CRAM = Snapshot über das Menü des Moduls.",
   "connect.disconnectedLog": "Getrennt",
 
+  "mobile.title": "📱 Mobiler Zugriff",
+  "mobile.hint": "Öffnet einen kleinen lokalen Webserver, um den Reiter GAMES (Kategorien, Mosaik, Spiel starten) über den Browser eines Smartphones im selben WLAN zu erreichen.",
+  "mobile.start": "▶ Starten",
+  "mobile.stop": "⏹ Stoppen",
+  "mobile.scanHint": "Scannen Sie diesen QR-Code mit der Kamera des Telefons, oder geben Sie die Adresse in dessen Browser ein.",
+  "mobile.noAuthHint": "⚠ Ohne Authentifizierung — nur vertrauenswürdiges lokales Netzwerk, niemals im Internet freigeben.",
+  "mobile.startedLog": "Mobiler Server gestartet: {url}",
+  "mobile.stoppedLog": "Mobiler Server gestoppt",
+
   "games.title": "Spiele nach Kategorie",
   "games.rootLabel": "📁 {root}",
   "games.refreshTitle": "Aktualisieren",
@@ -758,6 +785,15 @@ es: {
   "connect.emulatorSuffix": " · emulador",
   "connect.realHardwareHint": "Hardware real: la vista Memoria está en modo conservador (sin lectura automática, clic en «Actualizar»). VRAM/CRAM = instantánea a través del menú del cartucho.",
   "connect.disconnectedLog": "Desconectado",
+
+  "mobile.title": "📱 Acceso móvil",
+  "mobile.hint": "Abre un pequeño servidor web local para acceder a la pestaña GAMES (categorías, mosaico, lanzar un juego) desde el navegador de un smartphone conectado a la misma red Wi-Fi.",
+  "mobile.start": "▶ Iniciar",
+  "mobile.stop": "⏹ Detener",
+  "mobile.scanHint": "Escanee este código QR con la cámara del teléfono, o escriba la dirección en su navegador.",
+  "mobile.noAuthHint": "⚠ Sin autenticación — solo red local de confianza, nunca exponer en Internet.",
+  "mobile.startedLog": "Servidor móvil iniciado: {url}",
+  "mobile.stoppedLog": "Servidor móvil detenido",
 
   "games.title": "Juegos por categoría",
   "games.rootLabel": "📁 {root}",

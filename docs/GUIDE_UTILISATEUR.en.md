@@ -13,13 +13,14 @@ architecture, the protocol, or building it, see [`README.md`](../README.md)
 2. [Installation (Windows)](#installation-windows)
 3. [First launch and connection](#first-launch-and-connection)
 4. [GAMES tab](#games-tab)
-5. [SD Card tab](#sd-card-tab)
-6. [Play tab](#play-tab)
-7. [Memory tab](#memory-tab)
-8. [Sprites tab](#sprites-tab)
-9. [Troubleshooting](#troubleshooting)
-10. [QA test checklist](#qa-test-checklist)
-11. [Frequently asked questions](#frequently-asked-questions)
+5. [Mobile access](#mobile-access)
+6. [SD Card tab](#sd-card-tab)
+7. [Play tab](#play-tab)
+8. [Memory tab](#memory-tab)
+9. [Sprites tab](#sprites-tab)
+10. [Troubleshooting](#troubleshooting)
+11. [QA test checklist](#qa-test-checklist)
+12. [Frequently asked questions](#frequently-asked-questions)
 
 ## What you need
 
@@ -153,6 +154,35 @@ match is found, the thumbnail stays without boxart.
 click the small **⚙** button that appears, and enter the exact title as it
 appears in the chosen database (without the extension). It's remembered
 for next time.
+
+## Mobile access
+
+In the **🔌 Connection** tab, the **📱 Mobile access** card lets you reach a
+simplified version of the GAMES tab (categories, boxart mosaic, launching a
+game) from a smartphone's browser connected to the **same Wi-Fi network**
+as the computer.
+
+1. Click **▶ Start**. A QR code and an address (e.g.
+   `http://192.168.1.23:4590`) appear.
+2. On the phone, scan the QR code with the camera, or type the address into
+   a browser.
+3. The mobile page shows the same categories as the computer (including
+   the virtual GAMES category if the base folder has no subfolder — see
+   [GAMES tab](#games-tab) — but not Favorites, see below) and the same
+   boxart (network or local, depending on the source chosen on the
+   computer). Tapping a game offers to launch it directly on the console.
+4. **⏹ Stop** closes the server — no one can access it anymore.
+
+> ⚠️ **No authentication.** This server is meant for a trusted home Wi-Fi
+> network: anyone on that network can access it while it's running, and it
+> must **never** be exposed on the Internet (no port forwarding on your
+> router). Turn it off when you're not using it.
+
+**Limits of the mobile version** (intentionally simpler than the desktop):
+no Favorites category (list stored in the computer's browser, not shared),
+no changing the games folder or boxart source from the phone — those
+settings stay whatever is configured on the computer. Connecting to the
+cartridge (USB) always happens from the computer, never from the phone.
 
 ## SD Card tab
 

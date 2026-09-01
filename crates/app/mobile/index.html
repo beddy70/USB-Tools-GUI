@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <title>Turbo EverDrive — GAMES</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <h1>🕹️ GAMES</h1>
+    <span id="status" class="status">…</span>
+  </header>
+  <main id="app">
+    <p class="hint">Chargement…</p>
+  </main>
+
+  <!-- Confirmation de lancement (remplace confirm(), pas fiable sur mobile) -->
+  <div class="modal-backdrop" id="modal" hidden>
+    <div class="modal-box">
+      <p id="modal-msg"></p>
+      <div class="modal-actions">
+        <button class="btn ghost" id="modal-cancel">Annuler</button>
+        <button class="btn primary" id="modal-ok">▶ Lancer</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
